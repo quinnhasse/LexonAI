@@ -195,7 +195,7 @@ export async function researchAgent(question: string): Promise<Source[]> {
       throw new Error(errorMessage);
     }
 
-    const data: ExaSearchResponse = await response.json();
+    const data = await response.json() as ExaSearchResponse;
 
     console.log(`[ResearchAgent] Retrieved ${data.results.length} results from Exa`);
     console.log(`[ResearchAgent] Search type used: ${data.resolvedSearchType}`);

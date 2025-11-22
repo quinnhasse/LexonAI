@@ -66,7 +66,7 @@ async function handleAnswer(req: Request, res: Response): Promise<void> {
       sources,
       evidence_graph: evidenceGraph,
       meta: {
-        model: 'stub-llm-v1',  // TODO: Update with actual model name when LLM is integrated
+        model: 'gpt-4o-mini',  // OpenAI GPT-4o mini model for answer generation
         retrieval_latency_ms: retrievalLatencyMs,
         answer_latency_ms: answerLatencyMs,
         total_latency_ms: retrievalLatencyMs + answerLatencyMs

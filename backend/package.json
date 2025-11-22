@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
-    "test:research": "tsx scripts/test-research-agent.ts"
+    "test:research": "tsx scripts/test-research-agent.ts",
+    "test:answer": "tsx scripts/test-answer-agent.ts"
   },
   "keywords": [
     "ai",
@@ -22,7 +23,8 @@
   "dependencies": {
     "dotenv": "^16.3.1",
     "exa-js": "^2.0.9",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "openai": "^6.9.1"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

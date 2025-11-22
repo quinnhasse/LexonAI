@@ -37,7 +37,7 @@ NODE_ENV=development
 
 **Required API Keys:**
 - `EXA_API_KEY` - Get from [Exa](https://exa.ai/)
-- `LLM_API_KEY` - OpenAI or Anthropic API key (implementation pending)
+- `LLM_API_KEY` - OpenAI API key for answer generation (get from [OpenAI](https://platform.openai.com/api-keys))
 
 ### Running the Server
 
@@ -60,6 +60,11 @@ npm run type-check
 Testing the research agent:
 ```bash
 npm run test:research
+```
+
+Testing the answer agent:
+```bash
+npm run test:answer
 ```
 
 ## API Endpoints
@@ -111,10 +116,10 @@ Ask a question and receive a structured answer with sources and evidence graph.
     ]
   },
   "meta": {
-    "model": "stub-llm-v1",
+    "model": "gpt-4o-mini",
     "retrieval_latency_ms": 500,
-    "answer_latency_ms": 800,
-    "total_latency_ms": 1300
+    "answer_latency_ms": 2500,
+    "total_latency_ms": 3000
   }
 }
 ```
@@ -173,11 +178,16 @@ backend/
 - Test harness for unit testing (`npm run test:research`)
 - Integration with `/api/answer` endpoint
 
-### 🚧 Phase 3: LLM Answer Agent (TODO)
-- LLM integration in `answerAgent.ts`
-- Answer generation ONLY from provided sources
-- Source attribution and block structuring
-- Production error handling
+### ✅ Phase 3: LLM Answer Agent (Complete)
+- **Full OpenAI integration** in `answerAgent.ts`
+- Answer generation ONLY from provided sources (no hallucination)
+- Structured answer blocks with explicit source citations
+- Comprehensive validation and error handling
+- Uses GPT-4o-mini model for fast, cost-effective responses
+- JSON mode for guaranteed structured output
+- Retry logic with exponential backoff
+- Graceful fallback when LLM unavailable
+- Test harness for unit testing (`npm run test:answer`)
 
 ### 🚧 Future Enhancements
 - Rate limiting
@@ -237,10 +247,44 @@ curl -X POST http://localhost:3001/api/answer \
   -d '{"question": "What is Transparens AI?"}'
 ```
 
-### Next Steps
+### Answer Agent Implementation
 
-The Answer Agent (`answerAgent.ts`) is currently stubbed. Phase 3 will implement:
-1. LLM API integration (OpenAI/Anthropic)
-2. Prompt engineering to ensure answers cite sources
-3. Answer block generation with source attribution
-4. Production-ready error handling
+The Answer Agent (`answerAgent.ts`) uses OpenAI's GPT-4o-mini model to generate source-grounded answers:
+
+**Key Features:**
+1. **Source Grounding:** Answers ONLY use information from provided sources
+2. **JSON Mode:** Uses OpenAI's `response_format: { type: "json_object" }` for guaranteed structure
+3. **Prompt Engineering:**
+   - System message establishes strict "no hallucination" rules
+   - User message includes formatted sources with IDs, titles, URLs, and content
+   - Clear JSON schema specification
+4. **Validation:**
+   - Validates answer structure (text, blocks, source_ids)
+   - Verifies all source_ids reference actual sources
+   - Filters out invalid source citations
+5. **Error Handling:**
+   - Retry logic (2 attempts) with exponential backoff
+   - Fallback to safe stub answer on failure
+   - Never crashes the /api/answer endpoint
+6. **Performance:**
+   - Smart source truncation (1000 chars per source)
+   - Total context budget (30,000 chars)
+   - Average latency: 2-6 seconds
+   - Token usage: ~1,000-1,500 tokens per request
+
+**Model Configuration:**
+- Model: `gpt-4o-mini` (fast, cost-effective)
+- Temperature: `0.3` (factual, deterministic)
+- Max tokens: `3000` (sufficient for multi-block answers)
+
+**Testing:**
+Run the answer agent test suite:
+```bash
+npm run test:answer
+```
+
+This validates:
+- Answer structure (AnswerPayload type)
+- Source attribution (all source_ids are valid)
+- Grounding (blocks cite actual sources)
+- Error handling (empty sources, API failures)

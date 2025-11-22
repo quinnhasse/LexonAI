@@ -1,56 +1,386 @@
 /**
- * Answer Agent - LLM-based answer generation
- * Generates answers using ONLY the provided sources
+ * Answer Agent - LLM-based answer generation with source grounding
+ * Generates structured answers using OpenAI with strict source attribution
+ *
+ * This module implements the core "transparent AI" logic:
+ * - Uses ONLY provided sources (no hallucination)
+ * - Returns structured answer blocks with explicit source citations
+ * - Validates all source_ids reference actual sources
+ * - Falls back gracefully on errors to ensure system reliability
  */
 
 import { Source, AnswerPayload, AnswerBlock } from '../types/shared';
 import { config } from '../config/env';
+import OpenAI from 'openai';
+
+// ============================================================================
+// CONFIGURATION & CONSTANTS
+// ============================================================================
 
 /**
- * Generates an answer to the question using ONLY the provided sources
+ * Configuration constants for LLM interaction
+ * These control token limits, retry behavior, and model selection
+ */
+const LLM_CONFIG = {
+  MODEL: 'gpt-4o-mini',                  // Fast, cost-effective, supports JSON mode
+  MAX_TOKENS: 3000,                      // Output limit for answer generation
+  TEMPERATURE: 0.3,                      // Low temp for factual, grounded outputs
+  MAX_SOURCE_CHARS: 1000,                // Truncate each source to prevent overflow
+  MAX_TOTAL_CONTEXT_CHARS: 30000,        // Total context window budget
+  MAX_RETRY_ATTEMPTS: 2,                 // Retry on transient failures
+  RESPONSE_FORMAT: { type: "json_object" as const }, // Enforce JSON output
+} as const;
+
+/**
+ * Error types for structured error handling
+ */
+enum AnswerAgentErrorType {
+  LLM_API_ERROR = 'LLM_API_ERROR',           // OpenAI API failure
+  INVALID_JSON = 'INVALID_JSON',             // LLM returned malformed JSON
+  VALIDATION_ERROR = 'VALIDATION_ERROR',     // Response doesn't match schema
+  NO_API_KEY = 'NO_API_KEY',                 // Missing API key
+}
+
+/**
+ * Custom error class for answer agent failures
+ */
+class AnswerAgentError extends Error {
+  constructor(
+    public type: AnswerAgentErrorType,
+    message: string,
+    public originalError?: unknown
+  ) {
+    super(message);
+    this.name = 'AnswerAgentError';
+  }
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Truncates source content to fit within token budget
+ * Prioritizes snippet for conciseness (Exa already highlights relevant parts)
+ *
+ * @param source - Source object to truncate
+ * @param maxChars - Maximum characters per source
+ * @returns Truncated content string
+ */
+function truncateSourceContent(source: Source, maxChars: number): string {
+  // Prefer snippet (already optimized by Exa), fallback to full_text
+  const content = source.snippet || source.full_text || '';
+
+  if (content.length <= maxChars) {
+    return content;
+  }
+
+  // Smart truncation: try to end at sentence boundary
+  const truncated = content.substring(0, maxChars);
+  const lastPeriod = truncated.lastIndexOf('.');
+  const lastNewline = truncated.lastIndexOf('\n');
+  const cutoff = Math.max(lastPeriod, lastNewline);
+
+  if (cutoff > maxChars * 0.8) {
+    // If we found a good break point in the last 20%, use it
+    return truncated.substring(0, cutoff + 1) + ' [...]';
+  }
+
+  return truncated + '...';
+}
+
+/**
+ * Formats sources for inclusion in LLM prompt
+ * Creates a structured, numbered list with IDs, titles, URLs, and content
+ *
+ * @param sources - Array of sources from research agent
+ * @returns Formatted string for prompt inclusion
+ */
+function formatSourcesForPrompt(sources: Source[]): string {
+  if (sources.length === 0) {
+    return 'No sources available.';
+  }
+
+  let totalChars = 0;
+  const formattedSources: string[] = [];
+
+  for (const source of sources) {
+    const content = truncateSourceContent(source, LLM_CONFIG.MAX_SOURCE_CHARS);
+
+    // Format source with clear structure
+    const sourceBlock = `[${source.id}] Title: ${source.title}
+URL: ${source.url}
+Content: ${content}
+---`;
+
+    // Check if adding this source would exceed total budget
+    if (totalChars + sourceBlock.length > LLM_CONFIG.MAX_TOTAL_CONTEXT_CHARS) {
+      console.warn(
+        `[AnswerAgent] Truncated sources at ${formattedSources.length}/${sources.length} ` +
+        `due to context limit (${totalChars} chars)`
+      );
+      break;
+    }
+
+    formattedSources.push(sourceBlock);
+    totalChars += sourceBlock.length;
+  }
+
+  return formattedSources.join('\n\n');
+}
+
+/**
+ * Validates that LLM response matches expected AnswerPayload schema
+ * Checks structure, types, and source_id references
+ *
+ * @param response - Parsed JSON from LLM
+ * @param validSourceIds - Set of valid source IDs for validation
+ * @returns Typed AnswerPayload if valid
+ * @throws AnswerAgentError if validation fails
+ */
+function validateLLMResponse(
+  response: unknown,
+  validSourceIds: Set<string>
+): AnswerPayload {
+  // Type guard: check basic structure
+  if (!response || typeof response !== 'object') {
+    throw new AnswerAgentError(
+      AnswerAgentErrorType.VALIDATION_ERROR,
+      'LLM response is not an object'
+    );
+  }
+
+  const payload = response as Record<string, unknown>;
+
+  // Validate 'text' field
+  if (typeof payload.text !== 'string' || payload.text.trim().length === 0) {
+    throw new AnswerAgentError(
+      AnswerAgentErrorType.VALIDATION_ERROR,
+      'Missing or invalid "text" field in LLM response'
+    );
+  }
+
+  // Validate 'blocks' field
+  if (!Array.isArray(payload.blocks) || payload.blocks.length === 0) {
+    throw new AnswerAgentError(
+      AnswerAgentErrorType.VALIDATION_ERROR,
+      'Missing or empty "blocks" array in LLM response'
+    );
+  }
+
+  // Validate each block
+  const validatedBlocks: AnswerBlock[] = [];
+
+  for (let i = 0; i < payload.blocks.length; i++) {
+    const block = payload.blocks[i];
+
+    if (!block || typeof block !== 'object') {
+      throw new AnswerAgentError(
+        AnswerAgentErrorType.VALIDATION_ERROR,
+        `Block ${i} is not an object`
+      );
+    }
+
+    const b = block as Record<string, unknown>;
+
+    // Validate block.id
+    if (typeof b.id !== 'string' || !b.id.startsWith('ans-')) {
+      throw new AnswerAgentError(
+        AnswerAgentErrorType.VALIDATION_ERROR,
+        `Block ${i} has invalid id: ${b.id}`
+      );
+    }
+
+    // Validate block.type
+    if (b.type !== 'paragraph' && b.type !== 'bullet') {
+      throw new AnswerAgentError(
+        AnswerAgentErrorType.VALIDATION_ERROR,
+        `Block ${i} has invalid type: ${b.type}`
+      );
+    }
+
+    // Validate block.text
+    if (typeof b.text !== 'string' || b.text.trim().length === 0) {
+      throw new AnswerAgentError(
+        AnswerAgentErrorType.VALIDATION_ERROR,
+        `Block ${i} has invalid text`
+      );
+    }
+
+    // Validate block.source_ids
+    if (!Array.isArray(b.source_ids)) {
+      throw new AnswerAgentError(
+        AnswerAgentErrorType.VALIDATION_ERROR,
+        `Block ${i} has invalid source_ids (not an array)`
+      );
+    }
+
+    // Filter out invalid source IDs but keep the block
+    const validSourceIdsForBlock = b.source_ids.filter((sourceId): sourceId is string => {
+      if (typeof sourceId !== 'string') {
+        console.warn(`[AnswerAgent] Block ${i} contains non-string source_id: ${sourceId}`);
+        return false;
+      }
+
+      if (!validSourceIds.has(sourceId)) {
+        console.warn(`[AnswerAgent] Block ${i} references invalid source_id: ${sourceId}`);
+        return false;
+      }
+
+      return true;
+    });
+
+    validatedBlocks.push({
+      id: b.id as string,
+      type: b.type as 'paragraph' | 'bullet',
+      text: b.text as string,
+      source_ids: validSourceIdsForBlock,
+    });
+  }
+
+  return {
+    text: payload.text as string,
+    blocks: validatedBlocks,
+  };
+}
+
+/**
+ * Creates a fallback answer when LLM fails after all retries
+ * Ensures /api/answer never returns 500 error
  *
  * @param question - The user's question
- * @param sources - Array of sources from the research agent
+ * @param sources - Available sources
+ * @returns Minimal valid AnswerPayload
+ */
+function createFallbackAnswer(
+  question: string,
+  sources: Source[]
+): AnswerPayload {
+  console.warn('[AnswerAgent] Using fallback answer due to LLM failure');
+
+  const blocks: AnswerBlock[] = [];
+
+  if (sources.length === 0) {
+    blocks.push({
+      id: 'ans-1',
+      type: 'paragraph',
+      text: 'No sources were found to answer this question. Please try rephrasing your query or providing more context.',
+      source_ids: [],
+    });
+  } else {
+    // Create a simple answer listing available sources
+    blocks.push({
+      id: 'ans-1',
+      type: 'paragraph',
+      text: `I found ${sources.length} relevant source(s) related to: "${question}". However, I encountered an error generating a detailed answer. Please review the sources below.`,
+      source_ids: sources.map(s => s.id),
+    });
+
+    // Add first source as a sample
+    if (sources[0]) {
+      blocks.push({
+        id: 'ans-2',
+        type: 'paragraph',
+        text: `From "${sources[0].title}": ${sources[0].snippet}`,
+        source_ids: [sources[0].id],
+      });
+    }
+  }
+
+  const text = blocks.map(b => b.text).join(' ');
+
+  return { text, blocks };
+}
+
+// ============================================================================
+// PROMPT ENGINEERING
+// ============================================================================
+
+/**
+ * Builds the system message for LLM
+ * Defines the assistant's role, constraints, and output format
+ *
+ * @returns System message string
+ */
+function buildSystemMessage(): string {
+  return `You are a precise research assistant that answers questions using ONLY the provided sources.
+
+CRITICAL RULES:
+1. ONLY use information explicitly stated in the provided sources
+2. ALWAYS cite sources by their IDs (e.g., "s1", "s2") in the source_ids array
+3. If the sources don't contain enough information, say so explicitly
+4. Break your answer into logical blocks (paragraphs or bullet points)
+5. Each block must reference at least one source in its source_ids array
+6. Never make claims without source attribution
+7. Return ONLY valid JSON matching the exact schema below
+
+OUTPUT FORMAT:
+Return a JSON object with this exact structure:
+{
+  "text": "The complete answer as a single string",
+  "blocks": [
+    {
+      "id": "ans-1",
+      "type": "paragraph",
+      "text": "First paragraph of your answer...",
+      "source_ids": ["s1", "s2"]
+    },
+    {
+      "id": "ans-2",
+      "type": "bullet",
+      "text": "Key point as a bullet...",
+      "source_ids": ["s3"]
+    }
+  ]
+}
+
+BLOCK TYPES:
+- "paragraph": Use for explanatory text, definitions, or detailed points
+- "bullet": Use for lists, key findings, or discrete facts
+
+BLOCK IDs:
+- Must follow pattern "ans-1", "ans-2", "ans-3", etc.
+- Must be unique and sequential
+
+Remember: Your credibility depends on accurate source attribution. When in doubt, cite the source.`;
+}
+
+/**
+ * Builds the user message with question and formatted sources
+ *
+ * @param question - The user's question
+ * @param formattedSources - Pre-formatted source string
+ * @returns User message string
+ */
+function buildUserMessage(
+  question: string,
+  formattedSources: string
+): string {
+  return `Question: ${question}
+
+Available Sources:
+${formattedSources}
+
+Generate a comprehensive answer using ONLY the information from these sources. Return your response as JSON matching the required schema.`;
+}
+
+// ============================================================================
+// MAIN ANSWER AGENT FUNCTION
+// ============================================================================
+
+/**
+ * Generates an answer to the question using LLM and provided sources
+ *
+ * Flow:
+ * 1. Validate API key configuration
+ * 2. Format sources for prompt
+ * 3. Call OpenAI API with retry logic
+ * 4. Parse and validate JSON response
+ * 5. Return structured answer or fallback
+ *
+ * @param question - The user's question
+ * @param sources - Array of sources from research agent
  * @returns AnswerPayload with structured answer blocks and source citations
- *
- * TODO: Implement actual LLM integration
- * - Install LLM SDK (e.g., OpenAI or Anthropic Claude SDK)
- * - Use config.LLM_API_KEY for authentication
- *
- * LLM Prompt Structure:
- * ----------------------
- * System: You are a research assistant. Answer questions using ONLY the provided sources.
- *         You must cite sources using their IDs. Return your answer as JSON.
- *
- * User: Question: {question}
- *
- *       Available Sources:
- *       [s1] Title: {sources[0].title}
- *            URL: {sources[0].url}
- *            Content: {sources[0].snippet}
- *
- *       [s2] Title: {sources[1].title}
- *            ...
- *
- *       Return JSON matching this schema:
- *       {
- *         "text": "full answer text",
- *         "blocks": [
- *           {
- *             "id": "ans-1",
- *             "type": "paragraph" | "bullet",
- *             "text": "block content",
- *             "source_ids": ["s1", "s3"]
- *           }
- *         ]
- *       }
- *
- * Important constraints for the LLM:
- * - ONLY use information from the provided sources
- * - ALWAYS cite source IDs in source_ids arrays
- * - Break answer into logical blocks (paragraphs or bullet points)
- * - Each block should have clear source attribution
- * - If sources don't contain enough information, say so explicitly
  */
 export async function answerAgent(
   question: string,
@@ -58,45 +388,120 @@ export async function answerAgent(
 ): Promise<AnswerPayload> {
   console.log(`[AnswerAgent] Generating answer for: "${question}"`);
   console.log(`[AnswerAgent] Using ${sources.length} sources`);
-  console.log(`[AnswerAgent] LLM_API_KEY configured: ${!!config.LLM_API_KEY}`);
 
-  // Stub implementation for testing
-  // This simulates what the LLM would return
-
-  const blocks: AnswerBlock[] = [
-    {
-      id: 'ans-1',
-      type: 'paragraph',
-      text: `Based on the available research, ${question.toLowerCase().replace(/\?$/, '')} involves several key aspects.`,
-      source_ids: ['s1', 's2']
-    },
-    {
-      id: 'ans-2',
-      type: 'paragraph',
-      text: sources.length > 0
-        ? `According to current sources, ${sources[0].snippet}`
-        : 'No sources available to provide a detailed answer.',
-      source_ids: sources.length > 0 ? [sources[0].id] : []
-    }
-  ];
-
-  // If we have multiple sources, add a bullet point summary
-  if (sources.length > 1) {
-    blocks.push({
-      id: 'ans-3',
-      type: 'bullet',
-      text: `Key finding: ${sources[1]?.snippet || 'Additional research shows complementary evidence.'}`,
-      source_ids: sources.length > 1 ? [sources[1].id] : []
-    });
+  // Check API key
+  if (!config.llmApiKey) {
+    console.warn('[AnswerAgent] LLM_API_KEY not configured, using fallback');
+    return createFallbackAnswer(question, sources);
   }
 
-  const fullText = blocks.map(b => b.text).join(' ');
+  // Initialize OpenAI client
+  const client = new OpenAI({
+    apiKey: config.llmApiKey,
+  });
 
-  // Simulate LLM processing delay
-  await new Promise(resolve => setTimeout(resolve, 800));
+  // Build valid source ID set for validation
+  const validSourceIds = new Set(sources.map(s => s.id));
 
-  return {
-    text: fullText,
-    blocks
-  };
+  // Format sources for prompt
+  const formattedSources = formatSourcesForPrompt(sources);
+  const systemMessage = buildSystemMessage();
+  const userMessage = buildUserMessage(question, formattedSources);
+
+  // Retry loop
+  for (let attempt = 1; attempt <= LLM_CONFIG.MAX_RETRY_ATTEMPTS; attempt++) {
+    try {
+      console.log(`[AnswerAgent] LLM request attempt ${attempt}/${LLM_CONFIG.MAX_RETRY_ATTEMPTS}`);
+
+      const startTime = Date.now();
+
+      // Call OpenAI API
+      const completion = await client.chat.completions.create({
+        model: LLM_CONFIG.MODEL,
+        messages: [
+          { role: 'system', content: systemMessage },
+          { role: 'user', content: userMessage },
+        ],
+        temperature: LLM_CONFIG.TEMPERATURE,
+        max_tokens: LLM_CONFIG.MAX_TOKENS,
+        response_format: LLM_CONFIG.RESPONSE_FORMAT,
+      });
+
+      const latencyMs = Date.now() - startTime;
+      console.log(`[AnswerAgent] LLM response received in ${latencyMs}ms`);
+
+      // Extract response content
+      const content = completion.choices[0]?.message?.content;
+
+      if (!content) {
+        throw new AnswerAgentError(
+          AnswerAgentErrorType.LLM_API_ERROR,
+          'LLM returned empty response'
+        );
+      }
+
+      // Log token usage
+      if (completion.usage) {
+        console.log(
+          `[AnswerAgent] Token usage: ` +
+          `${completion.usage.prompt_tokens} prompt + ` +
+          `${completion.usage.completion_tokens} completion = ` +
+          `${completion.usage.total_tokens} total`
+        );
+      }
+
+      // Parse JSON
+      let parsedResponse: unknown;
+      try {
+        parsedResponse = JSON.parse(content);
+      } catch (error) {
+        throw new AnswerAgentError(
+          AnswerAgentErrorType.INVALID_JSON,
+          'LLM response is not valid JSON',
+          error
+        );
+      }
+
+      // Validate response schema
+      const validatedPayload = validateLLMResponse(parsedResponse, validSourceIds);
+
+      console.log(
+        `[AnswerAgent] Successfully generated answer with ${validatedPayload.blocks.length} blocks`
+      );
+
+      return validatedPayload;
+
+    } catch (error) {
+      // Log error details
+      console.error(
+        `[AnswerAgent] Attempt ${attempt} failed:`,
+        error instanceof AnswerAgentError ? error.message : error
+      );
+
+      // If this is the last attempt, fall back
+      if (attempt === LLM_CONFIG.MAX_RETRY_ATTEMPTS) {
+        console.error('[AnswerAgent] All retry attempts exhausted');
+        return createFallbackAnswer(question, sources);
+      }
+
+      // Don't retry on validation errors (they won't fix themselves)
+      if (error instanceof AnswerAgentError) {
+        if (
+          error.type === AnswerAgentErrorType.VALIDATION_ERROR ||
+          error.type === AnswerAgentErrorType.INVALID_JSON
+        ) {
+          console.error('[AnswerAgent] Non-retryable error, using fallback');
+          return createFallbackAnswer(question, sources);
+        }
+      }
+
+      // Wait before retry (exponential backoff)
+      const delayMs = 1000 * Math.pow(2, attempt - 1);
+      console.log(`[AnswerAgent] Retrying in ${delayMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  // Should never reach here, but TypeScript needs this
+  return createFallbackAnswer(question, sources);
 }
