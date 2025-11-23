@@ -5,6 +5,7 @@
 
 import { Source } from '../types/shared';
 import { config } from '../config/env';
+import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density';
 
 /**
  * Exa API request interface
@@ -120,17 +121,27 @@ function getStubSources(question: string): Source[] {
  * 1. Validates that EXA_API_KEY is configured
  * 2. Constructs a search request optimized for RAG use cases
  * 3. Calls the Exa search API with parameters to retrieve:
- *    - Top 5 most relevant results
+ *    - Top N most relevant results (configurable via density level, default 10)
  *    - Full text content (up to 10,000 characters)
  *    - Highlights/snippets (3 sentences, up to 5 per URL)
  * 4. Maps Exa results to the Source type defined in shared.ts
  * 5. Falls back to stub sources if API key is missing or request fails
  *
  * @param question - The user's question to research
+ * @param densityLevel - Graph density level (low/medium/high), defaults to medium
  * @returns Promise<Source[]> - Array of structured Source objects with URLs, snippets, and metadata
  */
-export async function researchAgent(question: string): Promise<Source[]> {
+export async function researchAgent(
+  question: string,
+  densityLevel: DensityLevel = DEFAULT_DENSITY
+): Promise<Source[]> {
   console.log(`[ResearchAgent] Searching for: "${question}"`);
+
+  // Get density configuration
+  const densityConfig = getDensityConfig(densityLevel);
+  const numResults = densityConfig.exaNumResults;
+
+  console.log(`[ResearchAgent] Density level: ${densityLevel} (${numResults} results)`);
 
   // Check if API key is configured
   if (!config.exaApiKey) {
@@ -140,12 +151,12 @@ export async function researchAgent(question: string): Promise<Source[]> {
 
   try {
     // Construct Exa search request optimized for RAG
-    // - numResults: 5 for quality over quantity
+    // - numResults: configurable via density level (6-12)
     // - type: 'auto' lets Exa choose best search method (neural vs deep)
     // Note: text and highlights need to be requested in a separate 'contents' parameter
     const searchRequest: ExaSearchRequest = {
       query: question,
-      numResults: 5,
+      numResults,
       type: 'auto'
     };
 

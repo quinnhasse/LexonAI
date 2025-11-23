@@ -9,6 +9,7 @@
 
 import { Source, AnswerPayload } from '../types/shared';
 import { config } from '../config/env';
+import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density';
 import OpenAI from 'openai';
 
 // ============================================================================
@@ -44,11 +45,9 @@ export interface SecondarySourceNode {
 
 const LLM_CONFIG = {
   MODEL: 'gpt-4o-mini',
-  MAX_TOKENS: 800,
+  MAX_TOKENS: 1000,
   TEMPERATURE: 0.2,
   MAX_SOURCE_CHARS: 800,
-  MAX_SECONDARY_CONCEPTS_PER_SOURCE: 3,
-  MAX_SOURCES_TO_PROCESS: 5,
   RESPONSE_FORMAT: { type: "json_object" as const },
 } as const;
 
@@ -80,7 +79,7 @@ function truncateSourceContent(source: Source, maxChars: number): string {
 function buildSystemMessage(): string {
   return `You are an expert at analyzing sources and identifying core underlying concepts.
 
-Your task is to extract 2-3 KEY SUPPORTING CONCEPTS from a given source that are relevant to the question.
+Your task is to extract 2-4 KEY SUPPORTING CONCEPTS from a given source that are relevant to the question.
 
 WHAT TO EXTRACT:
 - Core ideas or principles that the source relies on
@@ -110,7 +109,7 @@ IMPORTANCE SCORING:
 - 0.7-0.9: Important supporting concept
 - 0.5-0.7: Relevant but less central concept
 
-Return 2-3 concepts maximum. Focus on quality over quantity.`;
+Return 2-4 concepts. Focus on quality over quantity, but capture the key ideas that underpin this source.`;
 }
 
 /**
@@ -132,7 +131,7 @@ ${truncatedContent}
 
 This source is cited by ${relatedBlocks.length} answer block(s) in the response.
 
-Extract 2-3 key underlying concepts from this source that help answer the question.`;
+Extract 2-4 key underlying concepts from this source that help answer the question.`;
 }
 
 /**
@@ -186,8 +185,8 @@ function validateConceptsResponse(response: unknown): { title: string; text: str
  * Extracts secondary concepts from direct sources
  *
  * This function:
- * 1. Selects top-N sources by citation count
- * 2. For each source, calls LLM to extract 2-3 supporting concepts
+ * 1. Selects top-N sources by citation count (configurable via density)
+ * 2. For each source, calls LLM to extract 2-4 supporting concepts
  * 3. Returns array of SecondarySourceNode objects
  *
  * Error handling:
@@ -198,14 +197,24 @@ function validateConceptsResponse(response: unknown): { title: string; text: str
  * @param question - The user's question
  * @param answer - The structured answer with blocks
  * @param sources - The direct sources used in the answer
+ * @param densityLevel - Graph density level (low/medium/high), defaults to medium
  * @returns Array of secondary source nodes
  */
 export async function secondarySourceAgent(
   question: string,
   answer: AnswerPayload,
-  sources: Source[]
+  sources: Source[],
+  densityLevel: DensityLevel = DEFAULT_DENSITY
 ): Promise<SecondarySourceNode[]> {
   console.log(`[SecondarySourceAgent] Extracting secondary concepts...`);
+
+  // Get density configuration
+  const densityConfig = getDensityConfig(densityLevel);
+  const topSourcesToProcess = densityConfig.secondarySources.topSourcesToProcess;
+  const conceptsPerSource = densityConfig.secondarySources.conceptsPerSource;
+  const maxTotalConcepts = densityConfig.secondarySources.maxTotalConcepts;
+
+  console.log(`[SecondarySourceAgent] Density: ${densityLevel} (top ${topSourcesToProcess} sources, ${conceptsPerSource} concepts/source, max ${maxTotalConcepts} total)`);
 
   // Check API key
   if (!config.llmApiKey) {
@@ -234,16 +243,23 @@ export async function secondarySourceAgent(
     }
   }
 
-  // Sort sources by citation count (descending)
+  // Sort sources by citation count (descending), then by score
   const sourcesWithCounts = sources.map(source => ({
     source,
     citationCount: sourceToCitingBlocks.get(source.id)?.size || 0
-  })).sort((a, b) => b.citationCount - a.citationCount);
+  })).sort((a, b) => {
+    // First by citation count
+    if (b.citationCount !== a.citationCount) {
+      return b.citationCount - a.citationCount;
+    }
+    // Then by source score
+    return (b.source.score || 0) - (a.source.score || 0);
+  });
 
-  // Process top N sources
-  const sourcesToProcess = sourcesWithCounts.slice(0, LLM_CONFIG.MAX_SOURCES_TO_PROCESS);
+  // Process top N sources (configurable via density)
+  const sourcesToProcess = sourcesWithCounts.slice(0, topSourcesToProcess);
 
-  console.log(`[SecondarySourceAgent] Processing ${sourcesToProcess.length} sources`);
+  console.log(`[SecondarySourceAgent] Processing ${sourcesToProcess.length}/${sources.length} sources`);
 
   const secondaryNodes: SecondarySourceNode[] = [];
   let successCount = 0;
@@ -282,24 +298,33 @@ export async function secondarySourceAgent(
       const parsedResponse = JSON.parse(content);
       const concepts = validateConceptsResponse(parsedResponse);
 
-      // Limit to MAX_SECONDARY_CONCEPTS_PER_SOURCE
-      const limitedConcepts = concepts.slice(0, LLM_CONFIG.MAX_SECONDARY_CONCEPTS_PER_SOURCE);
+      // Limit to conceptsPerSource (configurable via density)
+      const limitedConcepts = concepts.slice(0, conceptsPerSource);
 
       console.log(`[SecondarySourceAgent] Extracted ${limitedConcepts.length} concepts from ${source.id}`);
 
       // Convert to SecondarySourceNode
       limitedConcepts.forEach((concept, index) => {
-        secondaryNodes.push({
-          id: `sec-${source.id}-${index + 1}`,
-          parentSourceId: source.id,
-          relatedBlockIds: relatedBlocks,
-          title: concept.title,
-          text: concept.text,
-          importance: concept.importance
-        });
+        // Respect global cap
+        if (secondaryNodes.length < maxTotalConcepts) {
+          secondaryNodes.push({
+            id: `sec-${source.id}-${index + 1}`,
+            parentSourceId: source.id,
+            relatedBlockIds: relatedBlocks,
+            title: concept.title,
+            text: concept.text,
+            importance: concept.importance
+          });
+        }
       });
 
       successCount++;
+
+      // Early exit if we hit the global cap
+      if (secondaryNodes.length >= maxTotalConcepts) {
+        console.log(`[SecondarySourceAgent] Reached global cap of ${maxTotalConcepts} concepts, stopping extraction`);
+        break;
+      }
 
     } catch (error) {
       failureCount++;

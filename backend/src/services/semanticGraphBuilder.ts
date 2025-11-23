@@ -9,6 +9,7 @@
 
 import { EvidenceNodeType } from '../types/shared';
 import { config } from '../config/env';
+import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density';
 import OpenAI from 'openai';
 
 // ============================================================================
@@ -45,15 +46,16 @@ export interface SemanticEdgeSpec {
 
 /**
  * Configuration options for semantic graph building
+ * If not provided, values are taken from density configuration
  */
 export interface SemanticGraphOptions {
-  /** Number of top neighbors to keep per node (default: 3) */
+  /** Number of top neighbors to keep per node */
   topK?: number;
 
-  /** Minimum similarity threshold to create an edge (default: 0.6) */
+  /** Minimum similarity threshold to create an edge */
   minSimilarity?: number;
 
-  /** Maximum total edges to return (default: 50) */
+  /** Maximum total edges to return */
   maxEdges?: number;
 }
 
@@ -65,9 +67,6 @@ const EMBEDDING_CONFIG = {
   MODEL: 'text-embedding-3-small',  // Cheap, fast, good quality
   MAX_INPUT_CHARS: 200,             // Truncate long texts
   BATCH_SIZE: 100,                  // OpenAI allows up to 2048 per batch
-  DEFAULT_TOP_K: 3,
-  DEFAULT_MIN_SIMILARITY: 0.6,
-  DEFAULT_MAX_EDGES: 50,
 } as const;
 
 /**
@@ -196,20 +195,25 @@ function batch<T>(array: T[], size: number): T[][] {
  * - Never throws errors
  *
  * @param nodes - Array of nodes to embed and connect
- * @param options - Configuration options
+ * @param options - Configuration options (if not provided, uses density config)
+ * @param densityLevel - Graph density level (low/medium/high), defaults to medium
  * @returns Array of weighted semantic edges
  */
 export async function semanticGraphBuilder(
   nodes: EmbeddableNode[],
-  options: SemanticGraphOptions = {}
+  options: SemanticGraphOptions = {},
+  densityLevel: DensityLevel = DEFAULT_DENSITY
 ): Promise<SemanticEdgeSpec[]> {
+  // Get density configuration and merge with explicit options
+  const densityConfig = getDensityConfig(densityLevel);
   const {
-    topK = EMBEDDING_CONFIG.DEFAULT_TOP_K,
-    minSimilarity = EMBEDDING_CONFIG.DEFAULT_MIN_SIMILARITY,
-    maxEdges = EMBEDDING_CONFIG.DEFAULT_MAX_EDGES,
+    topK = options.topK ?? densityConfig.semanticEdges.topK,
+    minSimilarity = options.minSimilarity ?? densityConfig.semanticEdges.minSimilarity,
+    maxEdges = options.maxEdges ?? densityConfig.semanticEdges.maxEdges,
   } = options;
 
   console.log(`[SemanticGraphBuilder] Building semantic edges for ${nodes.length} nodes`);
+  console.log(`[SemanticGraphBuilder] Density: ${densityLevel} (topK=${topK}, minSim=${minSimilarity}, maxEdges=${maxEdges})`);
 
   // Check API key
   if (!config.llmApiKey) {

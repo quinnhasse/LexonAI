@@ -14,6 +14,7 @@ import {
 } from '../types/shared';
 import { secondarySourceAgent, SecondarySourceNode } from './secondarySourceAgent';
 import { semanticGraphBuilder, EmbeddableNode } from './semanticGraphBuilder';
+import { getDensityConfig, DEFAULT_DENSITY, DensityLevel, logDensityConfig } from '../config/density';
 
 /**
  * Custom error for graph building failures
@@ -41,8 +42,8 @@ export class GraphBuildError extends Error {
  *
  * This function orchestrates:
  * 1. Base tree structure (L0-L2)
- * 2. Secondary concept extraction (L3)
- * 3. Semantic similarity edges
+ * 2. Secondary concept extraction (L3) - density-aware
+ * 3. Semantic similarity edges - density-aware
  *
  * All enhancement steps (L3, semantic) use graceful degradation:
  * - If secondarySourceAgent fails, continue without L3
@@ -52,16 +53,22 @@ export class GraphBuildError extends Error {
  * @param question - The original user question
  * @param answer - The structured answer with blocks
  * @param sources - The sources used in the answer
+ * @param densityLevel - Graph density level (low/medium/high), defaults to medium
  * @returns EvidenceGraph with nodes, edges, and metadata
  * @throws GraphBuildError if validation fails
  */
 export async function buildEvidenceGraph(
   question: string,
   answer: AnswerPayload,
-  sources: Source[]
+  sources: Source[],
+  densityLevel: DensityLevel = DEFAULT_DENSITY
 ): Promise<EvidenceGraph> {
   // Validation
   validateInputs(question, answer, sources);
+
+  // Log density configuration
+  const densityConfig = getDensityConfig(densityLevel);
+  logDensityConfig(densityLevel, densityConfig);
 
   const nodes: EvidenceNode[] = [];
   const edges: EvidenceEdge[] = [];
@@ -188,7 +195,7 @@ export async function buildEvidenceGraph(
   let secondaryNodes: SecondarySourceNode[] = [];
   try {
     console.log('[EvidenceGraph] Step 3: Extracting secondary concepts (Layer 3)...');
-    secondaryNodes = await secondarySourceAgent(question, answer, sources);
+    secondaryNodes = await secondarySourceAgent(question, answer, sources, densityLevel);
 
     for (const secNode of secondaryNodes) {
       // Add secondary source node
@@ -238,11 +245,7 @@ export async function buildEvidenceGraph(
     console.log(`[EvidenceGraph] Embeddable nodes: ${embeddableNodes.length}`);
 
     if (embeddableNodes.length >= 2) {
-      const semanticEdges = await semanticGraphBuilder(embeddableNodes, {
-        topK: 4,
-        minSimilarity: 0.65,
-        maxEdges: 40
-      });
+      const semanticEdges = await semanticGraphBuilder(embeddableNodes, {}, densityLevel);
 
       // Add semantic edges (avoid duplicates)
       for (const semEdge of semanticEdges) {

@@ -13,6 +13,7 @@ import { researchAgent } from '../services/researchAgent';
 import { answerAgent } from '../services/answerAgent';
 import { buildEvidenceGraph } from '../services/evidenceGraph';
 import { AnswerResponse, AnswerPayload, Source, EvidenceGraph } from '../types/shared';
+import { DensityLevel, DEFAULT_DENSITY, inferDensityLevel } from '../config/density';
 
 interface AnswerRequest {
   question: string;
@@ -116,13 +117,21 @@ async function handleAnswer(req: Request, res: Response): Promise<void> {
     console.log(`[${getTimestamp()}] [API] ========================================`);
 
     // ========================================================================
+    // DETERMINE DENSITY LEVEL
+    // ========================================================================
+    // Use default medium density for now - could be enhanced with user preference
+    const densityLevel: DensityLevel = DEFAULT_DENSITY;
+
+    console.log(`[${getTimestamp()}] [API] Density level: ${densityLevel.toUpperCase()}`);
+
+    // ========================================================================
     // STEP 1: RESEARCH - Get sources using Exa
     // ========================================================================
     try {
       const retrievalStart = Date.now();
       console.log(`[${getTimestamp()}] [API] Starting research phase...`);
 
-      sources = await researchAgent(question);
+      sources = await researchAgent(question, densityLevel);
       retrievalLatencyMs = Date.now() - retrievalStart;
 
       console.log(`[${getTimestamp()}] [API] ✓ Research complete`);
@@ -180,7 +189,7 @@ async function handleAnswer(req: Request, res: Response): Promise<void> {
       const graphStart = Date.now();
       console.log(`[${getTimestamp()}] [API] Building evidence graph...`);
 
-      evidenceGraph = await buildEvidenceGraph(question, answer, sources);
+      evidenceGraph = await buildEvidenceGraph(question, answer, sources, densityLevel);
       graphLatencyMs = Date.now() - graphStart;
 
       console.log(`[${getTimestamp()}] [API] ✓ Evidence graph built`);
