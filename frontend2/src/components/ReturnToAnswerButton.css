@@ -1,0 +1,40 @@
+.return-to-answer-button {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  width: 48px;
+  height: 48px;
+  background: rgba(15, 15, 15, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #e0e0e0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+.return-to-answer-button:hover {
+  background: rgba(25, 25, 25, 0.95);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.return-to-answer-button:active {
+  background: rgba(10, 10, 10, 0.95);
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.return-to-answer-button svg {
+  opacity: 0.9;
+}
+
+.return-to-answer-button:hover svg {
+  opacity: 1;
+}
