@@ -148,7 +148,13 @@ export default function Node({ node, isHighlighted, onClick, animationProgress }
       {/* Label - billboard (always faces camera) */}
       <group ref={textRef} position={[0, config.radius + 0.5, 0]}>
         <Text
-          fontSize={node.type === 'question' || node.type === 'answer_root' ? 0.5 : node.type === 'answer_block' ? 0.35 : 0.25}
+          fontSize={node.type === 'answer_root'
+            ? 1.1
+            : node.type === 'question'
+              ? 0.5
+              : node.type === 'answer_block'
+                ? 0.35
+                : 0.25}
           color="white"
           anchorX="center"
           anchorY="middle"
