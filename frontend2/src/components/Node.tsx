@@ -114,8 +114,19 @@ export default function Node({ node, isHighlighted, onClick, animationProgress }
         />
       </Sphere>
 
+      {/* Inner solid sphere for fill */}
+      <mesh scale={scale}>
+        <sphereGeometry args={[config.radius * 0.95, 16, 16]} />
+        <meshBasicMaterial
+          color="#000000"
+          transparent
+          opacity={0.0}
+          depthWrite
+        />
+      </mesh>
+
       {/* Wireframe outline - reduced segments for cleaner look */}
-      <mesh ref={wireframeRef} scale={scale}>
+      <mesh ref={wireframeRef} scale={scale} renderOrder={1}>
         <sphereGeometry args={[config.radius, 12, 8]} />
         <meshBasicMaterial
           color="#808080"
