@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import QuestionInput from './components/QuestionInput'
 import GraphVisualization from './components/GraphVisualization'
 import Sidebar from './components/Sidebar'
+import LandingPage from './components/LandingPage'
+import BackgroundNetworkSphere from './components/BackgroundNetworkSphere'
 import { ControlsPanel } from './components/controls/ControlsPanel'
 import { Node, Edge, ReasoningResponse, LayoutMode, ColorMode } from './types'
 import { transformResponseToGraph } from './utils/graphTransform'
@@ -141,17 +143,33 @@ function App() {
 
   return (
     <div className="app">
-      <GraphVisualization
-        nodes={nodes}
-        edges={edges}
-        highlightedNodes={highlightedNodes}
-        layoutMode={layoutMode}
-        colorMode={colorMode}
-        onNodeClick={handleNodeClick}
-        onInteraction={() => setIsPromptDimmed(true)}
-        isDemoMode={isDemoMode}
-      />
+      {/* Background sphere - always visible, subtle in background, slides away when question asked */}
+      <BackgroundNetworkSphere hasAskedQuestion={hasAskedQuestion} />
 
+      {/* Landing page - only visible before first question */}
+      {!hasAskedQuestion && (
+        <LandingPage
+          onQuestionSubmit={handleQuestionSubmit}
+          isLoading={isLoading}
+          hasAskedQuestion={hasAskedQuestion}
+        />
+      )}
+
+      {/* Graph visualization - appears after question is asked */}
+      {hasAskedQuestion && (
+        <GraphVisualization
+          nodes={nodes}
+          edges={edges}
+          highlightedNodes={highlightedNodes}
+          layoutMode={layoutMode}
+          colorMode={colorMode}
+          onNodeClick={handleNodeClick}
+          onInteraction={() => setIsPromptDimmed(true)}
+          isDemoMode={isDemoMode}
+        />
+      )}
+
+      {/* Controls panel - appears after graph loads */}
       {showControls && (
         <ControlsPanel
           layoutMode={layoutMode}
@@ -161,14 +179,18 @@ function App() {
         />
       )}
 
-      <QuestionInput
-        onSubmit={handleQuestionSubmit}
-        isLoading={isLoading}
-        hasAskedQuestion={hasAskedQuestion}
-        isDimmed={isPromptDimmed}
-        onActivate={() => setIsPromptDimmed(false)}
-      />
+      {/* Question input - moves to top after first question */}
+      {hasAskedQuestion && (
+        <QuestionInput
+          onSubmit={handleQuestionSubmit}
+          isLoading={isLoading}
+          hasAskedQuestion={hasAskedQuestion}
+          isDimmed={isPromptDimmed}
+          onActivate={() => setIsPromptDimmed(false)}
+        />
+      )}
 
+      {/* Sidebar - appears when node is selected */}
       <Sidebar
         node={selectedNode}
         isExpanded={sidebarExpanded}

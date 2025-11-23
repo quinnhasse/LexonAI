@@ -1,0 +1,81 @@
+/**
+ * LandingPage Styling
+ *
+ * Military-grade minimal design inspired by Google's homepage.
+ * Clean typography, generous whitespace, monochrome color scheme.
+ */
+
+.landing-page {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50; /* Above background (1), below controls (100+) */
+  pointer-events: none; /* Let background receive events, except for content */
+}
+
+.landing-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 60px;
+  pointer-events: auto; /* Re-enable events for content */
+}
+
+/* Lexon title - Military/tech typography */
+.landing-title {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+  font-size: 72px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.1em;
+  margin: 0;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1;
+  /* Subtle text shadow for depth */
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+/* Search bar container */
+.landing-search {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Override QuestionInput positioning for landing page */
+.landing-search .question-input-container {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+}
+
+/* Responsive design for tablets and mobile */
+@media (max-width: 768px) {
+  .landing-content {
+    gap: 40px;
+  }
+
+  .landing-title {
+    font-size: 48px;
+    letter-spacing: 0.08em;
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-content {
+    gap: 30px;
+    padding: 0 20px;
+  }
+
+  .landing-title {
+    font-size: 36px;
+    letter-spacing: 0.06em;
+  }
+}

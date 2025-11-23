@@ -1,0 +1,41 @@
+/**
+ * BackgroundNetworkSphere Styling
+ *
+ * Positions the spherical network visualization in the bottom-right corner
+ * with most of the sphere off-screen for a subtle background effect.
+ *
+ * Z-index hierarchy:
+ * - Layer 1 (z-index: 1): This background visualization
+ * - Layer 2 (z-index: 10): Graph visualization (when active)
+ * - Layer 3 (z-index: 50): Landing page content
+ * - Layer 4 (z-index: 100+): UI controls and panels
+ */
+
+.background-network-sphere {
+  position: fixed;
+  bottom: -50vh;
+  right: -50vw;
+  width: 150vw;
+  height: 150vh;
+  z-index: 1;
+  pointer-events: none; /* Ensure no interference with UI interactions */
+  opacity: 0.6; /* Subtle presence */
+}
+
+.background-network-sphere canvas {
+  width: 100% !important;
+  height: 100% !important;
+  background: transparent;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+  .background-network-sphere {
+    /* Scale down the sphere on mobile to be even more subtle */
+    bottom: -60vh;
+    right: -60vw;
+    width: 120vw;
+    height: 120vh;
+    opacity: 0.4;
+  }
+}
