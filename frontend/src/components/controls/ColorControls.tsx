@@ -29,12 +29,6 @@ export function ColorControls({ mode, onChange }: ColorControlsProps) {
       description: 'Tactical layer depth coding',
       previewColors: [palette.tier1, palette.tier2, palette.tier3],
     },
-    {
-      value: 'byRole',
-      label: 'By Type',
-      description: 'Classification-based coding',
-      previewColors: [palette.principle, palette.fact, palette.example],
-    },
   ];
 
   return (

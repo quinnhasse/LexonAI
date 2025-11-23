@@ -50,36 +50,6 @@ const ColorLegend: React.FC<ColorLegendProps> = ({ colorMode, palette = 'tactica
           },
         ];
 
-      case 'byRole':
-        // By Type mode - show node type colors
-        return [
-          {
-            label: 'Question',
-            color: colorEngine.palette.principle,
-            description: 'The original query being answered'
-          },
-          {
-            label: 'Answer Root',
-            color: colorEngine.palette.fact,
-            description: 'Central hub connecting all answer blocks'
-          },
-          {
-            label: 'Answer Block',
-            color: colorEngine.palette.example,
-            description: 'Individual concepts in the answer'
-          },
-          {
-            label: 'Direct Source',
-            color: colorEngine.palette.fact,
-            description: 'Primary evidence cited in the answer'
-          },
-          {
-            label: 'Secondary Source',
-            color: colorEngine.palette.analogy,
-            description: 'Background context supporting sources'
-          },
-        ];
-
       default:
         return [];
     }

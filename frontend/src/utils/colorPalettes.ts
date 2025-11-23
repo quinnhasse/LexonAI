@@ -75,10 +75,6 @@ export class ColorEngine {
       case 'byTier':
         return this.getColorByTier(node.metadata.layer || 0);
 
-      case 'byRole':
-        // Use node type as role
-        return this.getColorByNodeType(node.type);
-
       default:
         return this.palette.default;
     }
