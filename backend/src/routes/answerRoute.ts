@@ -14,6 +14,7 @@ import { answerAgent } from '../services/answerAgent';
 import { buildEvidenceGraph } from '../services/evidenceGraph';
 import { AnswerResponse, AnswerPayload, Source, EvidenceGraph } from '../types/shared';
 import { DensityLevel, DEFAULT_DENSITY, inferDensityLevel } from '../config/density';
+import { progressManager } from '../services/progressManager';
 
 interface AnswerRequest {
   question: string;
@@ -96,6 +97,9 @@ async function handleAnswer(req: Request, res: Response): Promise<void> {
   let graphLatencyMs = 0;
   const errors: string[] = [];
 
+  // Extract jobId from query params for progress tracking
+  const jobId = req.query.jobId as string | undefined;
+
   try {
     const { question } = req.body as AnswerRequest;
 
@@ -114,7 +118,16 @@ async function handleAnswer(req: Request, res: Response): Promise<void> {
     console.log(`[${getTimestamp()}] [API] ========================================`);
     console.log(`[${getTimestamp()}] [API] Request received: POST /api/answer`);
     console.log(`[${getTimestamp()}] [API] Question: "${question}"`);
+    if (jobId) {
+      console.log(`[${getTimestamp()}] [API] Job ID: ${jobId}`);
+    }
     console.log(`[${getTimestamp()}] [API] ========================================`);
+
+    // Initialize progress tracking if jobId provided
+    if (jobId) {
+      progressManager.createJob(jobId);
+      progressManager.updateProgress(jobId, 0, 'Starting...', 'init');
+    }
 
     // ========================================================================
     // DETERMINE DENSITY LEVEL
@@ -125,14 +138,24 @@ async function handleAnswer(req: Request, res: Response): Promise<void> {
     console.log(`[${getTimestamp()}] [API] Density level: ${densityLevel.toUpperCase()}`);
 
     // ========================================================================
-    // STEP 1: RESEARCH - Get sources using Exa
+    // STEP 1: RESEARCH - Get sources using Exa (0% → 15%)
     // ========================================================================
     try {
       const retrievalStart = Date.now();
       console.log(`[${getTimestamp()}] [API] Starting research phase...`);
 
+      // Update progress: Starting research
+      if (jobId) {
+        progressManager.updateProgress(jobId, 0, 'Searching neural networks', 'research');
+      }
+
       sources = await researchAgent(question, densityLevel);
       retrievalLatencyMs = Date.now() - retrievalStart;
+
+      // Update progress: Research complete
+      if (jobId) {
+        progressManager.updateProgress(jobId, 15, 'Research complete', 'research');
+      }
 
       console.log(`[${getTimestamp()}] [API] ✓ Research complete`);
       console.log(`[${getTimestamp()}] [API]   - Sources retrieved: ${sources.length}`);
@@ -148,19 +171,34 @@ async function handleAnswer(req: Request, res: Response): Promise<void> {
       console.error(`[${getTimestamp()}] [API] ✗ Research failed: ${errorMsg}`);
       errors.push(`Research failed: ${errorMsg}`);
 
+      // Update progress even on failure
+      if (jobId) {
+        progressManager.updateProgress(jobId, 15, 'Research complete (degraded)', 'research');
+      }
+
       // Continue with empty sources - we can still try to generate an answer
       sources = [];
     }
 
     // ========================================================================
-    // STEP 2: ANSWER - Generate answer using LLM with sources
+    // STEP 2: ANSWER - Generate answer using LLM with sources (15% → 75%)
     // ========================================================================
     try {
       const answerStart = Date.now();
       console.log(`[${getTimestamp()}] [API] Starting answer generation phase...`);
 
+      // Update progress: Starting answer generation
+      if (jobId) {
+        progressManager.updateProgress(jobId, 15, 'Linking neural networks', 'answer');
+      }
+
       answer = await answerAgent(question, sources);
       answerLatencyMs = Date.now() - answerStart;
+
+      // Update progress: Answer complete
+      if (jobId) {
+        progressManager.updateProgress(jobId, 75, 'Answer complete', 'answer');
+      }
 
       console.log(`[${getTimestamp()}] [API] ✓ Answer generation complete`);
       console.log(`[${getTimestamp()}] [API]   - Answer length: ${answer.text.length} characters`);
@@ -177,20 +215,35 @@ async function handleAnswer(req: Request, res: Response): Promise<void> {
       console.error(`[${getTimestamp()}] [API] ✗ Answer generation failed: ${errorMsg}`);
       errors.push(`Answer generation failed: ${errorMsg}`);
 
+      // Update progress even on failure
+      if (jobId) {
+        progressManager.updateProgress(jobId, 75, 'Answer complete (degraded)', 'answer');
+      }
+
       // Use fallback answer
       answer = createFallbackAnswer(errorMsg);
       console.log(`[${getTimestamp()}] [API] Using fallback answer`);
     }
 
     // ========================================================================
-    // STEP 3: BUILD EVIDENCE GRAPH (with L3 + semantic edges)
+    // STEP 3: BUILD EVIDENCE GRAPH (with L3 + semantic edges) (75% → 100%)
     // ========================================================================
     try {
       const graphStart = Date.now();
       console.log(`[${getTimestamp()}] [API] Building evidence graph...`);
 
+      // Update progress: Starting graph building
+      if (jobId) {
+        progressManager.updateProgress(jobId, 75, 'Materializing thoughts', 'graph');
+      }
+
       evidenceGraph = await buildEvidenceGraph(question, answer, sources, densityLevel);
       graphLatencyMs = Date.now() - graphStart;
+
+      // Update progress: Graph complete
+      if (jobId) {
+        progressManager.updateProgress(jobId, 100, 'Ready', 'complete');
+      }
 
       console.log(`[${getTimestamp()}] [API] ✓ Evidence graph built`);
       console.log(`[${getTimestamp()}] [API]   - Total nodes: ${evidenceGraph.nodes.length}`);
@@ -235,6 +288,11 @@ async function handleAnswer(req: Request, res: Response): Promise<void> {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[${getTimestamp()}] [API] ✗ Graph building failed: ${errorMsg}`);
       errors.push(`Graph building failed: ${errorMsg}`);
+
+      // Update progress even on failure
+      if (jobId) {
+        progressManager.updateProgress(jobId, 100, 'Ready (degraded)', 'complete');
+      }
 
       // Use minimal graph
       evidenceGraph = createMinimalGraph(question);

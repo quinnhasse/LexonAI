@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import QuestionInput from './components/QuestionInput'
 import GraphVisualization from './components/GraphVisualization'
 import Sidebar from './components/Sidebar'
 import LandingPage from './components/LandingPage'
 import BackgroundNetworkSphere from './components/BackgroundNetworkSphere'
 import { ControlsPanel } from './components/controls/ControlsPanel'
+import { LoadingOverlay } from './components/LoadingOverlay'
 import { Node, Edge, ReasoningResponse, LayoutMode, ColorMode } from './types'
 import { transformResponseToGraph } from './utils/graphTransform'
 import { askQuestion, ApiError } from './services/api'
+import { v4 as uuidv4 } from 'uuid'
 import './App.css'
 
 function App() {
@@ -23,6 +25,13 @@ function App() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('cluster')
   const [colorMode, setColorMode] = useState<ColorMode>('byLevel')
   const [showControls, setShowControls] = useState(false)
+
+  // Loading overlay state
+  const [loadingProgress, setLoadingProgress] = useState(0)
+  const [loadingStatus, setLoadingStatus] = useState('Thinking...')
+  const pollingIntervalRef = useRef<number | null>(null)
+  const pollingFailureCountRef = useRef(0)
+  const syntheticProgressIntervalRef = useRef<number | null>(null)
 
   // Handle ESC key to collapse sidebar
   useEffect(() => {
@@ -40,7 +49,79 @@ function App() {
     setSidebarExpanded(true) // Auto-open sidebar when node is clicked
   }
 
+  // Clean up polling intervals
+  const cleanupPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
+    }
+    if (syntheticProgressIntervalRef.current) {
+      clearInterval(syntheticProgressIntervalRef.current)
+      syntheticProgressIntervalRef.current = null
+    }
+    pollingFailureCountRef.current = 0
+  }
+
+  // Start synthetic progress animation (fallback)
+  const startSyntheticProgress = () => {
+    const startTime = Date.now()
+    const duration = 10000 // 10 seconds to reach 90%
+
+    syntheticProgressIntervalRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(90, (elapsed / duration) * 90)
+      setLoadingProgress(progress)
+    }, 100)
+  }
+
+  // Poll backend for progress updates
+  const startProgressPolling = (jobId: string) => {
+    const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000'
+
+    pollingIntervalRef.current = window.setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/progress/${jobId}`)
+
+        if (!response.ok) {
+          pollingFailureCountRef.current++
+
+          // After 3 failures, switch to synthetic progress
+          if (pollingFailureCountRef.current >= 3) {
+            console.warn('Progress polling failed 3 times, switching to synthetic progress')
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current)
+              pollingIntervalRef.current = null
+            }
+            startSyntheticProgress()
+          }
+          return
+        }
+
+        const data = await response.json()
+        pollingFailureCountRef.current = 0 // Reset failure count on success
+
+        setLoadingProgress(data.progress)
+        setLoadingStatus(data.status)
+      } catch (error) {
+        pollingFailureCountRef.current++
+
+        // After 3 failures, switch to synthetic progress
+        if (pollingFailureCountRef.current >= 3) {
+          console.warn('Progress polling failed 3 times, switching to synthetic progress')
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current)
+            pollingIntervalRef.current = null
+          }
+          startSyntheticProgress()
+        }
+      }
+    }, 300) // Poll every 300ms
+  }
+
   const handleQuestionSubmit = async (question: string) => {
+    // Generate unique job ID for this request
+    const jobId = uuidv4()
+
     setHasAskedQuestion(true)
     setIsLoading(true)
     setNodes([])
@@ -50,17 +131,34 @@ function App() {
     setSidebarExpanded(false) // Collapse sidebar
     setShowControls(false) // Hide controls during loading
 
+    // Reset progress state
+    setLoadingProgress(0)
+    setLoadingStatus('Starting...')
+    cleanupPolling()
+
+    // Start progress polling
+    startProgressPolling(jobId)
+
     try {
-      // Call backend API using the API client
-      const data = await askQuestion(question)
+      // Call backend API with jobId for progress tracking
+      const data = await askQuestion(question, jobId)
       console.log('✅ API Response:', data)
       setIsDemoMode(false)
+
+      // Set progress to 100%
+      cleanupPolling()
+      setLoadingProgress(100)
+      setLoadingStatus('Ready')
 
       // Transform API response to graph data
       const graphData = transformResponseToGraph(data)
       setNodes(graphData.nodes)
       setEdges(graphData.edges)
-      setIsLoading(false)
+
+      // Wait briefly to show 100% state, then hide overlay
+      setTimeout(() => {
+        setIsLoading(false)
+      }, 400)
 
       // Find and auto-select the answer root node with animation
       const answerRootNode = graphData.nodes.find(n => n.type === 'answer_root')
@@ -95,6 +193,11 @@ function App() {
         console.error('API Error Details:', error.message, error.status)
       }
 
+      // Set progress to 100% and cleanup
+      cleanupPolling()
+      setLoadingProgress(100)
+      setLoadingStatus('Ready')
+
       try {
         // Load the example response as fallback
         const exampleResponse = await fetch('/examples/example-response.json')
@@ -110,7 +213,11 @@ function App() {
         const graphData = transformResponseToGraph(data)
         setNodes(graphData.nodes)
         setEdges(graphData.edges)
-        setIsLoading(false)
+
+        // Wait briefly to show 100% state, then hide overlay
+        setTimeout(() => {
+          setIsLoading(false)
+        }, 400)
 
         // Find and auto-select the answer root node with animation
         const answerRootNode = graphData.nodes.find(n => n.type === 'answer_root')
@@ -143,6 +250,13 @@ function App() {
 
   return (
     <div className="app">
+      {/* Loading overlay - appears during query processing */}
+      <LoadingOverlay
+        visible={isLoading}
+        progress={loadingProgress}
+        status={loadingStatus}
+      />
+
       {/* Background sphere - always visible, subtle in background, slides away when question asked */}
       <BackgroundNetworkSphere hasAskedQuestion={hasAskedQuestion} />
 

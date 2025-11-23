@@ -6,6 +6,7 @@
 import express from 'express';
 import { config } from './config/env';
 import { registerAnswerRoute } from './routes/answerRoute';
+import progressRoute from './routes/progressRoute';
 
 // Load environment variables from .env file
 import dotenv from 'dotenv';
@@ -45,6 +46,7 @@ app.get('/health', (req, res) => {
 
 // Register routes
 registerAnswerRoute(app);
+app.use('/api/progress', progressRoute);
 
 // 404 handler
 app.use((req, res) => {
@@ -53,7 +55,8 @@ app.use((req, res) => {
     message: `Route ${req.method} ${req.path} not found`,
     availableRoutes: [
       'GET /health',
-      'POST /api/answer'
+      'POST /api/answer',
+      'GET /api/progress/:jobId'
     ]
   });
 });
@@ -70,6 +73,7 @@ app.listen(PORT, () => {
   console.log('\nAvailable endpoints:');
   console.log(`  GET  http://localhost:${PORT}/health`);
   console.log(`  POST http://localhost:${PORT}/api/answer`);
+  console.log(`  GET  http://localhost:${PORT}/api/progress/:jobId`);
   console.log('\nConfiguration:');
   console.log(`  EXA_API_KEY: ${config.exaApiKey ? '✓ Set' : '✗ Not set'}`);
   console.log(`  LLM_API_KEY: ${config.llmApiKey ? '✓ Set' : '✗ Not set'}`);

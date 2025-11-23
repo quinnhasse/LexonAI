@@ -26,15 +26,21 @@ export class ApiError extends Error {
  * Ask a question and get a reasoning response with evidence graph
  *
  * @param question - The question to ask
+ * @param jobId - Optional job ID for progress tracking
  * @returns Promise with the reasoning response including evidence graph
  * @throws ApiError if the request fails
  */
-export async function askQuestion(question: string): Promise<ReasoningResponse> {
+export async function askQuestion(question: string, jobId?: string): Promise<ReasoningResponse> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.timeout);
 
   try {
-    const response = await fetch(`${API_CONFIG.baseUrl}/api/answer`, {
+    // Append jobId as query param if provided
+    const url = jobId
+      ? `${API_CONFIG.baseUrl}/api/answer?jobId=${encodeURIComponent(jobId)}`
+      : `${API_CONFIG.baseUrl}/api/answer`;
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
