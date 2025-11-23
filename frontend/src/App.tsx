@@ -45,6 +45,7 @@ function App() {
     setEdges([])
     setHighlightedNodes(new Set())
     setSelectedNode(null) // Clear previous selection
+    setSidebarExpanded(false) // Collapse sidebar
     setShowControls(false) // Hide controls during loading
 
     try {

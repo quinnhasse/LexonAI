@@ -18,12 +18,33 @@ export default function QuestionInput({
   onActivate,
 }: QuestionInputProps) {
   const [question, setQuestion] = useState('')
+  const [lastSubmittedQuestion, setLastSubmittedQuestion] = useState('')
+  const [questionBeforeFocus, setQuestionBeforeFocus] = useState('')
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (question.trim() && !isLoading) {
       onSubmit(question)
+      setLastSubmittedQuestion(question)
+      // Keep the question visible in the input after submission
+    }
+  }
+
+  const handleFocus = () => {
+    // Store the current question before clearing
+    setQuestionBeforeFocus(question)
+
+    // Clear the input when user clicks to enter a new question
+    if (hasAskedQuestion && question === lastSubmittedQuestion) {
       setQuestion('')
+    }
+    onActivate()
+  }
+
+  const handleBlur = () => {
+    // If user didn't type anything (input is empty), restore the previous question
+    if (question.trim() === '' && questionBeforeFocus) {
+      setQuestion(questionBeforeFocus)
     }
   }
 
@@ -62,6 +83,8 @@ export default function QuestionInput({
           type="text"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           placeholder="ENTER QUERY..."
           className="question-input"
           disabled={isLoading}
