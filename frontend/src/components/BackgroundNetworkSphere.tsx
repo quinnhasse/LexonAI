@@ -127,9 +127,9 @@ function NetworkSphereScene() {
           key={`edge-${index}`}
           points={[edge.start, edge.end]}
           color="#ffffff"
-          lineWidth={0.5}
+          lineWidth={1.5}
           transparent
-          opacity={0.15}
+          opacity={0.4}
         />
       ))}
     </group>

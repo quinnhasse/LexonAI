@@ -49,7 +49,7 @@ export default function LandingPage({
             ease: [0.4, 0, 0.2, 1],
           }}
         >
-          LEXON
+          Lexon
         </motion.h1>
 
         {/* Search bar component - moves up via its own animation in QuestionInput */}
