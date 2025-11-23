@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import QuestionInput from './components/QuestionInput'
 import GraphVisualization from './components/GraphVisualization'
-import NodeDetailPanel from './components/NodeDetailPanel'
+import Sidebar from './components/Sidebar'
 import { Node, Edge, ReasoningResponse } from './types'
 import { transformResponseToGraph } from './utils/graphTransform'
 import { askQuestion, ApiError } from './services/api'
@@ -16,6 +16,18 @@ function App() {
   const [hasAskedQuestion, setHasAskedQuestion] = useState(false)
   const [isPromptDimmed, setIsPromptDimmed] = useState(false)
   const [isDemoMode, setIsDemoMode] = useState(false)
+  const [sidebarExpanded, setSidebarExpanded] = useState(true)
+
+  // Handle ESC key to collapse sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedNode && sidebarExpanded) {
+        setSidebarExpanded(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedNode, sidebarExpanded])
 
   const handleQuestionSubmit = async (question: string) => {
     setHasAskedQuestion(true)
@@ -23,6 +35,7 @@ function App() {
     setNodes([])
     setEdges([])
     setHighlightedNodes(new Set())
+    setSelectedNode(null) // Clear previous selection
 
     try {
       // Call backend API using the API client
@@ -35,6 +48,17 @@ function App() {
       setNodes(graphData.nodes)
       setEdges(graphData.edges)
       setIsLoading(false)
+
+      // Find and auto-select the answer root node with animation
+      const answerRootNode = graphData.nodes.find(n => n.type === 'answer_root')
+      if (answerRootNode) {
+        setSelectedNode(answerRootNode)
+        setSidebarExpanded(false) // Start collapsed
+        // Expand after a short delay to trigger transition animation
+        setTimeout(() => {
+          setSidebarExpanded(true)
+        }, 100)
+      }
 
       // Highlight all nodes after a short delay
       setTimeout(() => {
@@ -69,6 +93,17 @@ function App() {
         setNodes(graphData.nodes)
         setEdges(graphData.edges)
         setIsLoading(false)
+
+        // Find and auto-select the answer root node with animation
+        const answerRootNode = graphData.nodes.find(n => n.type === 'answer_root')
+        if (answerRootNode) {
+          setSelectedNode(answerRootNode)
+          setSidebarExpanded(false) // Start collapsed
+          // Expand after a short delay to trigger transition animation
+          setTimeout(() => {
+            setSidebarExpanded(true)
+          }, 100)
+        }
 
         // Highlight all nodes after a short delay
         setTimeout(() => {
@@ -120,12 +155,11 @@ function App() {
         onActivate={() => setIsPromptDimmed(false)}
       />
 
-      {selectedNode && (
-        <NodeDetailPanel
-          node={selectedNode}
-          onClose={() => setSelectedNode(null)}
-        />
-      )}
+      <Sidebar
+        node={selectedNode}
+        isExpanded={sidebarExpanded}
+        onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+      />
     </div>
   )
 }

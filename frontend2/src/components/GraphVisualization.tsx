@@ -40,6 +40,7 @@ function CameraController({ distance }: { distance: number }) {
   return null
 }
 
+
 // Component to track which nodes are visible in camera frustum
 function NodeVisibilityTracker({
   nodes,
