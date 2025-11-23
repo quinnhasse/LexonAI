@@ -27,11 +27,13 @@ function App() {
   const [showControls, setShowControls] = useState(false)
 
   // Loading overlay state
-  const [loadingProgress, setLoadingProgress] = useState(0)
+  const [backendProgress, setBackendProgress] = useState(0)  // Actual backend progress
+  const [displayProgress, setDisplayProgress] = useState(0)  // Smoothly animated progress
   const [loadingStatus, setLoadingStatus] = useState('Thinking...')
   const pollingIntervalRef = useRef<number | null>(null)
   const pollingFailureCountRef = useRef(0)
   const syntheticProgressIntervalRef = useRef<number | null>(null)
+  const smoothProgressIntervalRef = useRef<number | null>(null)
 
   // Handle ESC key to collapse sidebar
   useEffect(() => {
@@ -59,7 +61,44 @@ function App() {
       clearInterval(syntheticProgressIntervalRef.current)
       syntheticProgressIntervalRef.current = null
     }
+    if (smoothProgressIntervalRef.current) {
+      clearInterval(smoothProgressIntervalRef.current)
+      smoothProgressIntervalRef.current = null
+    }
     pollingFailureCountRef.current = 0
+  }
+
+  // Start smooth progress animation that interpolates between backend values
+  const startSmoothProgress = () => {
+    smoothProgressIntervalRef.current = window.setInterval(() => {
+      setDisplayProgress((currentDisplay) => {
+        setBackendProgress((currentBackend) => {
+          // Calculate target: stay slightly ahead of backend but cap at 95% unless complete
+          const targetProgress = currentBackend >= 100
+            ? 100
+            : Math.min(currentBackend + 5, 95)
+
+          // If we're already at or past target, don't increment
+          if (currentDisplay >= targetProgress) {
+            return currentBackend // Return backend unchanged
+          }
+
+          // Calculate increment based on distance to target
+          const distance = targetProgress - currentDisplay
+          const increment = distance > 20 ? 0.8 : distance > 10 ? 0.5 : 0.3
+
+          // Return new display progress (monotonic - never decrease)
+          const newDisplay = Math.min(currentDisplay + increment, targetProgress)
+
+          // Update display progress through parent setter
+          setTimeout(() => setDisplayProgress(newDisplay), 0)
+
+          return currentBackend // Return backend unchanged
+        })
+
+        return currentDisplay // This will be overridden by setTimeout above
+      })
+    }, 50) // Update every 50ms for smooth animation
   }
 
   // Start synthetic progress animation (fallback)
@@ -70,7 +109,7 @@ function App() {
     syntheticProgressIntervalRef.current = window.setInterval(() => {
       const elapsed = Date.now() - startTime
       const progress = Math.min(90, (elapsed / duration) * 90)
-      setLoadingProgress(progress)
+      setBackendProgress(progress) // Update backend progress, smooth animation will catch up
     }, 100)
   }
 
@@ -100,7 +139,7 @@ function App() {
         const data = await response.json()
         pollingFailureCountRef.current = 0 // Reset failure count on success
 
-        setLoadingProgress(data.progress)
+        setBackendProgress(data.progress) // Update backend value, smooth animation will catch up
         setLoadingStatus(data.status)
       } catch (error) {
         pollingFailureCountRef.current++
@@ -132,9 +171,13 @@ function App() {
     setShowControls(false) // Hide controls during loading
 
     // Reset progress state
-    setLoadingProgress(0)
+    setBackendProgress(0)
+    setDisplayProgress(0)
     setLoadingStatus('Starting...')
     cleanupPolling()
+
+    // Start smooth progress animation
+    startSmoothProgress()
 
     // Start progress polling
     startProgressPolling(jobId)
@@ -145,20 +188,21 @@ function App() {
       console.log('✅ API Response:', data)
       setIsDemoMode(false)
 
-      // Set progress to 100%
-      cleanupPolling()
-      setLoadingProgress(100)
+      // Instantly jump to 100% and hide overlay - let user see graph forming!
+      setBackendProgress(100)
+      setDisplayProgress(100)  // Instant jump, no waiting for smooth animation
       setLoadingStatus('Ready')
+      cleanupPolling()
+
+      // Brief flash of 100% state, then immediately show graph
+      setTimeout(() => {
+        setIsLoading(false)
+      }, 150)
 
       // Transform API response to graph data
       const graphData = transformResponseToGraph(data)
       setNodes(graphData.nodes)
       setEdges(graphData.edges)
-
-      // Wait briefly to show 100% state, then hide overlay
-      setTimeout(() => {
-        setIsLoading(false)
-      }, 400)
 
       // Find and auto-select the answer root node with animation
       const answerRootNode = graphData.nodes.find(n => n.type === 'answer_root')
@@ -193,10 +237,11 @@ function App() {
         console.error('API Error Details:', error.message, error.status)
       }
 
-      // Set progress to 100% and cleanup
-      cleanupPolling()
-      setLoadingProgress(100)
+      // Instantly jump to 100% for demo mode too
+      setBackendProgress(100)
+      setDisplayProgress(100)
       setLoadingStatus('Ready')
+      cleanupPolling()
 
       try {
         // Load the example response as fallback
@@ -214,10 +259,10 @@ function App() {
         setNodes(graphData.nodes)
         setEdges(graphData.edges)
 
-        // Wait briefly to show 100% state, then hide overlay
+        // Brief flash of 100%, then show graph
         setTimeout(() => {
           setIsLoading(false)
-        }, 400)
+        }, 150)
 
         // Find and auto-select the answer root node with animation
         const answerRootNode = graphData.nodes.find(n => n.type === 'answer_root')
@@ -253,7 +298,7 @@ function App() {
       {/* Loading overlay - appears during query processing */}
       <LoadingOverlay
         visible={isLoading}
-        progress={loadingProgress}
+        progress={displayProgress}
         status={loadingStatus}
       />
 
