@@ -1,4 +1,4 @@
-/* Military-grade application background - Pure black, tactical */
+/* Military-grade application background - Tactical grid overlay */
 
 .app {
   width: 100vw;
@@ -6,4 +6,11 @@
   position: relative;
   overflow: hidden;
   background: #000000;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 2px, transparent 2px),
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 40px 40px, 40px 40px, 8px 8px, 8px 8px;
+  background-position: -1px -1px, -1px -1px, 0 0, 0 0;
 }
