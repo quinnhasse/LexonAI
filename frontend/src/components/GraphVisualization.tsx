@@ -104,9 +104,9 @@ function IdleRotation({
       lastInteractionTime.current = now
       isRotating.current = false
     } else {
-      // Check if user has been idle for 3 seconds
+      // Check if user has been idle for 6 seconds
       const idleTime = now - lastInteractionTime.current
-      const idleThreshold = 3000 // 3 seconds
+      const idleThreshold = 6000 // 6 seconds
 
       if (idleTime > idleThreshold) {
         isRotating.current = true
@@ -115,7 +115,7 @@ function IdleRotation({
 
     // Apply gentle rotation when idle
     if (isRotating.current) {
-      groupRef.current.rotation.y += 0.0005 // Very slow rotation
+      groupRef.current.rotation.y += 0.0002 // Very slow rotation
     }
   })
 
