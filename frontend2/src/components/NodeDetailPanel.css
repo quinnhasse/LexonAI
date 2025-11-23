@@ -1,0 +1,143 @@
+.node-detail-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.node-detail-panel {
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  animation: slideUp 0.3s ease-out;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.panel-header h3 {
+  margin: 12px 0 0 0;
+  color: #e0e0e0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.role-badge[data-role="answer"] {
+  background: rgba(255, 255, 255, 0.15);
+  color: #e0e0e0;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.role-badge[data-role="block"] {
+  background: rgba(176, 176, 176, 0.15);
+  color: #b0b0b0;
+  box-shadow: 0 0 8px rgba(176, 176, 176, 0.1);
+}
+
+.role-badge[data-role="source"] {
+  background: rgba(96, 96, 96, 0.15);
+  color: #909090;
+  box-shadow: 0 0 6px rgba(96, 96, 96, 0.1);
+}
+
+.close-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+}
+
+.panel-content {
+  padding: 24px;
+}
+
+.content-section {
+  margin-bottom: 24px;
+}
+
+.content-section:last-child {
+  margin-bottom: 0;
+}
+
+.content-section h4 {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.content-section p {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.source-text {
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+}
+
+.source-link {
+  color: #60a5fa;
+  text-decoration: none;
+  word-break: break-all;
+  transition: color 0.2s ease;
+}
+
+.source-link:hover {
+  color: #93c5fd;
+  text-decoration: underline;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
