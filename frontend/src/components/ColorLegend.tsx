@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Key } from 'lucide-react';
+import { List } from 'lucide-react';
 import { ColorEngine } from '../utils/colorPalettes';
 import { PANEL_STYLES } from '../utils/constants';
 import type { ColorMode, ColorPaletteName } from '../types';
@@ -29,24 +29,24 @@ const ColorLegend: React.FC<ColorLegendProps> = ({ colorMode, palette = 'tactica
         // By Tier mode - show layer-based colors
         return [
           {
-            label: 'Layer 1',
-            color: colorEngine.palette.tier1,
-            description: 'Conceptual branches radiating from center'
-          },
-          {
-            label: 'Layer 2',
-            color: colorEngine.palette.tier2,
-            description: 'Primary evidence and direct sources'
-          },
-          {
-            label: 'Layer 3',
-            color: colorEngine.palette.tier3,
-            description: 'Supporting concepts and context'
-          },
-          {
-            label: 'Layer 0/4+',
+            label: 'Answer',
             color: colorEngine.palette.tier4,
-            description: 'Central question and answer root'
+            description: 'Central answer to your question'
+          },
+          {
+            label: 'Answer Chunks',
+            color: colorEngine.palette.tier1,
+            description: 'Pieces of the answer, each representing a key concept'
+          },
+          {
+            label: 'Direct Sources',
+            color: colorEngine.palette.tier2,
+            description: 'Sources that support the answer chunks'
+          },
+          {
+            label: 'Concepts',
+            color: colorEngine.palette.tier3,
+            description: 'Key concepts relating to sources and topics'
           },
         ];
 
@@ -136,8 +136,8 @@ const ColorLegend: React.FC<ColorLegendProps> = ({ colorMode, palette = 'tactica
           e.currentTarget.style.borderColor = PANEL_STYLES.BORDER;
         }}
       >
-        <Key size={14} />
-        KEY
+        <List size={14} />
+        LEGEND
       </button>
 
       {/* Expanded Legend Content */}
