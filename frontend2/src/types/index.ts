@@ -6,6 +6,7 @@ export interface GraphNode {
   id: string;
   type: NodeType;
   label: string;
+  displayHeading?: string; // Short heading for 3D graph display (max 3 words)
   position?: [number, number, number];
   metadata: {
     layer: number;

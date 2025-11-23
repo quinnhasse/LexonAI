@@ -79,11 +79,9 @@ export default function Node({ node, isHighlighted, onClick, animationProgress }
     : 1
   const scale = baseScale * animScale
 
-  // Truncate label for display
+  // Get display text - use displayHeading if available, otherwise fallback to label
   const getDisplayText = (): string => {
-    const label = node.label || 'Node'
-    // Truncate long labels
-    return label.length > 50 ? label.substring(0, 50) + '...' : label
+    return node.displayHeading || node.label || 'Node'
   }
 
   return (

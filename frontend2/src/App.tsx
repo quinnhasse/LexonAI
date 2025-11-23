@@ -2,8 +2,9 @@ import { useState } from 'react'
 import QuestionInput from './components/QuestionInput'
 import GraphVisualization from './components/GraphVisualization'
 import NodeDetailPanel from './components/NodeDetailPanel'
-import { ReasoningResponse, Node, Edge } from './types'
+import { Node, Edge } from './types'
 import { transformResponseToGraph } from './utils/graphTransform'
+import { askQuestion, ApiError } from './services/api'
 import './App.css'
 
 function App() {
@@ -23,16 +24,9 @@ function App() {
     setHighlightedNodes(new Set())
 
     try {
-      // Call backend API
-      const res = await fetch('http://localhost:8000/api/ask', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ question }),
-      })
-      const data: ReasoningResponse = await res.json()
-      console.log(data);
+      // Call backend API using the API client
+      const data = await askQuestion(question)
+      console.log('API Response:', data)
 
       // Transform API response to graph data
       const graphData = transformResponseToGraph(data)
@@ -46,7 +40,11 @@ function App() {
         setHighlightedNodes(allNodeIds)
       }, 500)
     } catch (error) {
-      console.error('Error fetching response:', error)
+      if (error instanceof ApiError) {
+        console.error('API Error:', error.message, error.status, error.data)
+      } else {
+        console.error('Error fetching response:', error)
+      }
       setIsLoading(false)
     }
   }

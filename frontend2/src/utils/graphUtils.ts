@@ -1,5 +1,17 @@
 import { Edge, GraphNode, NodeType } from '../types'
 
+/**
+ * Converts a label string to a short heading (max 3 words).
+ * Used for displaying concise node labels in the 3D graph.
+ */
+export function toShortHeading(label: string): string {
+  if (!label || label.trim() === '') {
+    return ''
+  }
+  const words = label.trim().split(/\s+/)
+  return words.slice(0, 3).join(' ')
+}
+
 interface LeafOptions {
   allowedRelations?: Edge['relation'][]
 }
