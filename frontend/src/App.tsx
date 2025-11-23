@@ -293,6 +293,11 @@ function App() {
     }
   }
 
+  const handleAddNodesAndEdges = (newNodes: Node[], newEdges: Edge[]) => {
+    setNodes(prevNodes => [...prevNodes, ...newNodes])
+    setEdges(prevEdges => [...prevEdges, ...newEdges])
+  }
+
   return (
     <div className="app">
       {/* Loading overlay - appears during query processing */}
@@ -354,6 +359,8 @@ function App() {
         node={selectedNode}
         isExpanded={sidebarExpanded}
         onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+        onAddNodesAndEdges={handleAddNodesAndEdges}
+        edges={edges}
       />
     </div>
   )

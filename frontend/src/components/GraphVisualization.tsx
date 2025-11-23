@@ -252,36 +252,96 @@ export default function GraphVisualization({
   const graphGroupRef = useRef<Group>(null)
   const orbitControlsRef = useRef<any>(null)
   const cameraAnimationRef = useRef<number | null>(null)
+  const previousNodeIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (nodes.length > 0) {
-      // Apply layout based on selected mode
-      const positioned = applyLayout(nodes, edges, layoutMode)
-      setPositionedNodes(positioned)
+      const currentNodeIds = new Set(nodes.map(n => n.id))
+      const previousNodeIds = previousNodeIdsRef.current
 
-      // Prune semantic edges to prevent visual overload
-      const pruned = pruneSemanticEdges(edges, positioned, 3)
-      setPrunedEdges(pruned)
+      // Detect if this is an incremental update (new nodes added) or a full replacement
+      const isIncrementalUpdate = previousNodeIds.size > 0 &&
+        Array.from(previousNodeIds).every(id => currentNodeIds.has(id))
 
-      // Calculate bounding box to fit all nodes
-      let maxDistance = 0
-      positioned.forEach(node => {
-        if (node.position) {
-          const distance = Math.sqrt(
-            node.position[0] ** 2 +
-            node.position[2] ** 2
-          )
-          maxDistance = Math.max(maxDistance, distance)
-        }
-      })
+      if (isIncrementalUpdate) {
+        // Only position new nodes, keep existing ones
+        const newNodeIds = Array.from(currentNodeIds).filter(id => !previousNodeIds.has(id))
+        const newNodes = nodes.filter(n => newNodeIds.includes(n.id))
 
-      // Add generous padding (2x + 15 units) for comfortable viewing
-      const fittedDistance = maxDistance * 2 + 15
-      setCameraDistance(fittedDistance)
+        // Position new nodes near their parent source nodes
+        const positionedNewNodes = newNodes.map(newNode => {
+          // Find parent edge (edge pointing TO this new node)
+          const parentEdge = edges.find(e => e.to === newNode.id || e.target === newNode.id)
+          if (parentEdge) {
+            const parentId = parentEdge.from || parentEdge.source
+            const parentNode = positionedNodes.find(n => n.id === parentId)
 
-      // Start animation sequence with pruned edges
-      startAnimationSequence(positioned, pruned)
-      setParticlePulseTrigger(0)
+            if (parentNode && parentNode.position) {
+              // Position new node near parent with some random offset
+              const angle = Math.random() * Math.PI * 2
+              const distance = 3 + Math.random() * 2
+              return {
+                ...newNode,
+                position: [
+                  parentNode.position[0] + Math.cos(angle) * distance,
+                  parentNode.position[1] + (Math.random() - 0.5) * 2,
+                  parentNode.position[2] + Math.sin(angle) * distance,
+                ] as [number, number, number]
+              }
+            }
+          }
+          // Fallback: random position near origin
+          return {
+            ...newNode,
+            position: [
+              (Math.random() - 0.5) * 10,
+              (Math.random() - 0.5) * 5,
+              (Math.random() - 0.5) * 10,
+            ] as [number, number, number]
+          }
+        })
+
+        // Merge existing positioned nodes with new ones
+        setPositionedNodes([...positionedNodes, ...positionedNewNodes])
+
+        // Add new edges
+        const pruned = pruneSemanticEdges(edges, [...positionedNodes, ...positionedNewNodes], 3)
+        setPrunedEdges(pruned)
+
+        // Animate only the new nodes
+        animateNewNodes(positionedNewNodes, edges)
+      } else {
+        // Full graph replacement - apply layout to all nodes
+        const positioned = applyLayout(nodes, edges, layoutMode)
+        setPositionedNodes(positioned)
+
+        // Prune semantic edges to prevent visual overload
+        const pruned = pruneSemanticEdges(edges, positioned, 3)
+        setPrunedEdges(pruned)
+
+        // Calculate bounding box to fit all nodes
+        let maxDistance = 0
+        positioned.forEach(node => {
+          if (node.position) {
+            const distance = Math.sqrt(
+              node.position[0] ** 2 +
+              node.position[2] ** 2
+            )
+            maxDistance = Math.max(maxDistance, distance)
+          }
+        })
+
+        // Add generous padding (2x + 15 units) for comfortable viewing
+        const fittedDistance = maxDistance * 2 + 15
+        setCameraDistance(fittedDistance)
+
+        // Start animation sequence with pruned edges
+        startAnimationSequence(positioned, pruned)
+        setParticlePulseTrigger(0)
+      }
+
+      // Update the ref for next comparison
+      previousNodeIdsRef.current = currentNodeIds
     }
   }, [nodes, edges, layoutMode])
 
@@ -313,6 +373,28 @@ export default function GraphVisualization({
   }, [positionedNodes, prunedEdges])
 
   // Staged animation sequence for 4-layer graph
+  const animateNewNodes = (newNodes: GraphNode[], allEdges: EdgeType[]) => {
+    // Animate only the new nodes being added
+    newNodes.forEach((node, idx) => {
+      setTimeout(() => {
+        animateNode(node.id, 600)
+      }, idx * 150) // Stagger slightly
+    })
+
+    // Animate edges connected to new nodes
+    const newNodeIds = new Set(newNodes.map(n => n.id))
+    const newEdges = allEdges.filter(e =>
+      newNodeIds.has(e.to) || newNodeIds.has(e.target || '')
+    )
+
+    newEdges.forEach((edge, idx) => {
+      const edgeKey = `${edge.from || edge.source}-${edge.to || edge.target}`
+      setTimeout(() => {
+        animateEdge(edgeKey, 800)
+      }, idx * 150 + 300) // After nodes start appearing
+    })
+  }
+
   const startAnimationSequence = (nodes: GraphNode[], edges: EdgeType[]) => {
     // Reset animation state
     setAnimState({

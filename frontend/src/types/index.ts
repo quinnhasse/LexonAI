@@ -50,6 +50,7 @@ export interface DirectSourceNode extends GraphNode {
     layer: 2;
     url?: string;
     snippet?: string;
+    full_text?: string;
     score?: number;
     provider?: string;
     publishedDate?: string;

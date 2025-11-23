@@ -204,6 +204,7 @@ export async function buildEvidenceGraph(
       shortLabel: generateSourceLabel(source.title, source.url),
       metadata: {
         fullText: source.snippet,
+        full_text: source.full_text,
         url: source.url,
         score: source.score,
         layer: 2,
