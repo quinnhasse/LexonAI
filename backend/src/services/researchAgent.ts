@@ -166,7 +166,7 @@ export async function researchAgent(
       ...searchRequest,
       contents: {
         text: {
-          maxCharacters: 10000,
+          maxCharacters: 1500,
           includeHtmlTags: false
         },
         highlights: {
@@ -208,6 +208,7 @@ export async function researchAgent(
 
     const data = await response.json() as ExaSearchResponse;
 
+    console.log(`[ResearchAgent] Got ${data.results.reduce((sum, result) => sum + (result.text?.length || 0), 0)}`)
     console.log(`[ResearchAgent] Retrieved ${data.results.length} results from Exa`);
     console.log(`[ResearchAgent] Search type used: ${data.resolvedSearchType}`);
     if (data.costDollars?.total) {

@@ -22,7 +22,7 @@ import OpenAI from 'openai';
  * These control token limits, retry behavior, and model selection
  */
 const LLM_CONFIG = {
-  MODEL: 'gpt-4o-mini',                  // Fast, cost-effective, supports JSON mode
+  MODEL: config.llmModel,                 // Allows overriding to faster models (default: gpt-3.5-turbo)
   MAX_TOKENS: 3000,                      // Output limit for answer generation
   TEMPERATURE: 0.3,                      // Low temp for factual, grounded outputs
   MAX_SOURCE_CHARS: 1000,                // Truncate each source to prevent overflow
@@ -245,6 +245,26 @@ function validateLLMResponse(
 }
 
 /**
+ * Logs prompt metrics (character count + approximate tokens)
+ */
+function logPromptUsage(
+  stage: string,
+  messages: { role: string; content?: string }[],
+  sourceChars: number,
+  sourceCount: number
+): void {
+  const totalChars = messages.reduce(
+    (sum, msg) => sum + (msg.content?.length ?? 0),
+    0
+  );
+  const approxTokens = Math.ceil(totalChars / 4);
+  console.log(
+    `[AnswerAgent] ${stage}: ${totalChars} chars (~${approxTokens} tokens); ` +
+    `sources=${sourceCount}, source payload=${sourceChars} chars`
+  );
+}
+
+/**
  * Creates a fallback answer when LLM fails after all retries
  * Ensures /api/answer never returns 500 error
  *
@@ -303,59 +323,29 @@ function createFallbackAnswer(
  * @returns System message string
  */
 function buildSystemMessage(): string {
-  return `You are a precise research assistant that answers questions using ONLY the provided sources.
+  return `You are a precise research assistant. Use ONLY the supplied sources to answer the question.
 
-CRITICAL RULES:
-1. ONLY use information explicitly stated in the provided sources
-2. ALWAYS cite sources by their IDs (e.g., "s1", "s2") in the source_ids array
-3. If the sources don't contain enough information, say so explicitly
-4. Break your answer into CONCEPTUAL blocks - each block should represent a single core concept or idea
-5. Each block must reference at least one source (preferably 2-4 sources) in its source_ids array
-6. Never make claims without source attribution
-7. Return ONLY valid JSON matching the exact schema below
+Constraints:
+- Cite sources by their IDs (e.g., "s1", "s2") in every block's source_ids array.
+- If the sources lack the answer, say so explicitly and avoid hallucinations.
+- Break your response into conceptual blocks, each representing one idea.
+- Each block should reference at least one source (preferably 2-4).
+- Use the structure below and return VALID JSON only.
 
-CONCEPTUAL BLOCK STRUCTURE:
-- Each block = ONE distinct concept related to the question
-- Simple questions may have 1-2 conceptual blocks
-- Complex questions may naturally require 3-8 conceptual blocks
-- Each concept should form a logical branch that the frontend can visualize as radiating from the central answer
-- Don't arbitrarily split paragraphs - only create new blocks for genuinely distinct concepts
-
-OUTPUT FORMAT:
-Return a JSON object with this exact structure:
+Response format:
 {
-  "text": "The complete answer as a single string",
+  "text": "The complete answer as prose (concatenated block text).",
   "blocks": [
     {
       "id": "ans-1",
-      "type": "paragraph",
-      "text": "First conceptual component of your answer...",
+      "type": "paragraph" | "bullet",
+      "text": "...",
       "source_ids": ["s1", "s2"]
-    },
-    {
-      "id": "ans-2",
-      "type": "bullet",
-      "text": "Second distinct concept as a key point...",
-      "source_ids": ["s2", "s3"]
     }
   ]
 }
 
-BLOCK TYPES:
-- "paragraph": Use for explanatory text, definitions, or detailed conceptual explanations
-- "bullet": Use for lists, key findings, or discrete facts that form a concept
-
-BLOCK IDs:
-- Must follow pattern "ans-1", "ans-2", "ans-3", etc.
-- Must be unique and sequential
-
-SOURCE ATTRIBUTION:
-- Each block should cite 1-4 sources that support that concept
-- Prefer 2-4 sources per block when available and relevant
-- More complex concepts may naturally require more source support
-- Your credibility depends on accurate source attribution
-
-Remember: Think in terms of conceptual branches, not arbitrary text chunks. Each block is a building block of understanding.`;
+Keep blocks sequential ("ans-1", "ans-2", ...), avoid duplicating IDs, and keep each block focused on a single concept.`;
 }
 
 /**
@@ -420,6 +410,11 @@ export async function answerAgent(
   const formattedSources = formatSourcesForPrompt(sources);
   const systemMessage = buildSystemMessage();
   const userMessage = buildUserMessage(question, formattedSources);
+  const promptMessages = [
+    { role: 'system', content: systemMessage },
+    { role: 'user', content: userMessage },
+  ];
+  logPromptUsage('Prompt payload', promptMessages, formattedSources.length, sources.length);
 
   // Retry loop
   for (let attempt = 1; attempt <= LLM_CONFIG.MAX_RETRY_ATTEMPTS; attempt++) {
@@ -431,10 +426,7 @@ export async function answerAgent(
       // Call OpenAI API
       const completion = await client.chat.completions.create({
         model: LLM_CONFIG.MODEL,
-        messages: [
-          { role: 'system', content: systemMessage },
-          { role: 'user', content: userMessage },
-        ],
+        messages: promptMessages,
         temperature: LLM_CONFIG.TEMPERATURE,
         max_tokens: LLM_CONFIG.MAX_TOKENS,
         response_format: LLM_CONFIG.RESPONSE_FORMAT,

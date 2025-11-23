@@ -47,7 +47,7 @@ export interface SecondarySourceNode {
 // ============================================================================
 
 const LLM_CONFIG = {
-  MODEL: 'gpt-4o-mini',
+  MODEL: config.llmModel,
   MAX_TOKENS: 1000,
   TEMPERATURE: 0.2,
   MAX_SOURCE_CHARS: 800,
@@ -192,6 +192,162 @@ function validateConceptsResponse(response: unknown): { title: string; text: str
   return concepts;
 }
 
+/**
+ * Batch concept response entry
+ */
+interface BatchSourceConcept {
+  source_id: string;
+  concepts: Array<{
+    title: string;
+    text: string;
+    short_label: string;
+    importance?: number;
+  }>;
+}
+
+/**
+ * Validates the batched secondary concept response from the LLM
+ */
+function validateBatchConceptsResponse(response: unknown): BatchSourceConcept[] {
+  if (!response || typeof response !== 'object') {
+    throw new Error('Invalid batch response: not an object');
+  }
+
+  const payload = response as Record<string, unknown>;
+  if (!Array.isArray(payload.sources)) {
+    throw new Error('Invalid batch response: sources is not an array');
+  }
+
+  const batch: BatchSourceConcept[] = [];
+
+  for (const entry of payload.sources) {
+    if (!entry || typeof entry !== 'object') continue;
+    const sourceEntry = entry as Record<string, unknown>;
+    const sourceId = typeof sourceEntry.source_id === 'string' ? sourceEntry.source_id : undefined;
+    if (!sourceId) continue;
+    const concepts = sourceEntry.concepts;
+    if (!Array.isArray(concepts)) continue;
+
+    const validatedConcepts = validateConceptsResponse({ concepts });
+    if (validatedConcepts.length === 0) continue;
+
+    batch.push({
+      source_id: sourceId,
+      concepts: validatedConcepts,
+    });
+  }
+
+  return batch;
+}
+
+/**
+ * Truncates a source text for the batch prompt
+ */
+function truncateSourceForBatch(source: Source, maxChars: number): string {
+  const content = source.full_text || source.snippet || '';
+  if (content.length <= maxChars) {
+    return content;
+  }
+  const truncated = content.substring(0, maxChars);
+  const lastPeriod = truncated.lastIndexOf('.');
+  if (lastPeriod > maxChars * 0.7) {
+    return truncated.substring(0, lastPeriod + 1) + ' [...]';
+  }
+  return truncated + '...';
+}
+
+/**
+ * Builds the batch prompt for secondary concept extraction
+ */
+function buildBatchSecondaryPrompt(
+  question: string,
+  sources: { source: Source; citationCount: number; relatedBlocks: string[] }[],
+  conceptsPerSource: number
+): string {
+  const sourceDescriptions = sources.map((entry, idx) => {
+    const source = entry.source;
+    const snippet = truncateSourceForBatch(source, 1000);
+    const blocks = entry.relatedBlocks.length > 0 ? entry.relatedBlocks.join(', ') : 'None';
+
+    return `Source ${idx + 1}:
+Source ID: ${source.id}
+Title: ${source.title}
+URL: ${source.url}
+Snippet:
+${snippet}
+Citation count: ${entry.citationCount}
+Cited by blocks: ${blocks}
+`;
+  });
+
+  return `Question: ${question}
+
+You are extracting ${conceptsPerSource} supporting concept(s) from each source above that help answer the question.
+
+For each source, return 2-4 high-level supporting concepts that:
+- reveal core ideas or terminology underpinning the source
+- relate directly to the question
+- include an importance score between 0 and 1
+
+Return ONLY valid JSON matching this structure:
+{
+  "sources": [
+    {
+      "source_id": "s1",
+      "concepts": [
+        {
+          "title": "Concept name",
+          "text": "2-4 sentence explanation",
+          "short_label": "tag (1-3 words)",
+          "importance": 0.85
+        }
+      ]
+    }
+  ]
+}
+
+Maintain source order. Limit concepts to ${conceptsPerSource} per source and keep text concise.
+
+Sources:
+${sourceDescriptions.join('\n')}
+`;
+}
+
+/**
+ * Extracts secondary concepts via a single batched LLM call
+ */
+async function extractSecondaryConceptsBatch(
+  question: string,
+  sources: { source: Source; citationCount: number; relatedBlocks: string[] }[],
+  conceptsPerSource: number
+): Promise<BatchSourceConcept[]> {
+  if (sources.length === 0) {
+    return [];
+  }
+
+  const client = new OpenAI({ apiKey: config.llmApiKey });
+  const prompt = buildBatchSecondaryPrompt(question, sources, conceptsPerSource);
+
+  const completion = await client.chat.completions.create({
+    model: LLM_CONFIG.MODEL,
+    messages: [
+      { role: 'system', content: buildSystemMessage() },
+      { role: 'user', content: prompt },
+    ],
+    temperature: LLM_CONFIG.TEMPERATURE,
+    max_tokens: 1200,
+    response_format: { type: "json_object" as const },
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error('LLM returned empty batch secondary response');
+  }
+
+  const parsed = JSON.parse(content);
+  return validateBatchConceptsResponse(parsed);
+}
+
 // ============================================================================
 // MAIN FUNCTION
 // ============================================================================
@@ -242,11 +398,6 @@ export async function secondarySourceAgent(
     return [];
   }
 
-  // Initialize OpenAI client
-  const client = new OpenAI({
-    apiKey: config.llmApiKey,
-  });
-
   // Build map of source -> citing blocks
   const sourceToCitingBlocks = new Map<string, Set<string>>();
   for (const block of answer.blocks) {
@@ -280,73 +431,57 @@ export async function secondarySourceAgent(
   let successCount = 0;
   let failureCount = 0;
 
-  for (const { source, citationCount } of sourcesToProcess) {
-    // Skip sources with no citations (shouldn't happen, but defensive)
+  const sourcesWithContext = sourcesToProcess.map(({ source, citationCount }) => ({
+    source,
+    citationCount,
+    relatedBlocks: Array.from(sourceToCitingBlocks.get(source.id) || []),
+  }));
+
+  let batchConcepts: BatchSourceConcept[] = [];
+
+  try {
+    console.log('[SecondarySourceAgent] Extracting concepts via batched prompt');
+    batchConcepts = await extractSecondaryConceptsBatch(question, sourcesWithContext, conceptsPerSource);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.warn(`[SecondarySourceAgent] Batched extraction failed: ${errorMsg}`);
+  }
+
+  const conceptMap = new Map(batchConcepts.map(entry => [entry.source_id, entry.concepts]));
+
+  for (const { source, citationCount, relatedBlocks } of sourcesWithContext) {
     if (citationCount === 0) {
       continue;
     }
 
-    const relatedBlocks = Array.from(sourceToCitingBlocks.get(source.id) || []);
+    const concepts = conceptMap.get(source.id) || [];
+    if (concepts.length === 0) {
+      failureCount++;
+      continue;
+    }
 
-    try {
-      console.log(`[SecondarySourceAgent] Extracting concepts from source ${source.id} (${citationCount} citations)`);
+    successCount++;
 
-      const systemMessage = buildSystemMessage();
-      const userMessage = buildUserMessage(question, source, relatedBlocks);
-
-      const completion = await client.chat.completions.create({
-        model: LLM_CONFIG.MODEL,
-        messages: [
-          { role: 'system', content: systemMessage },
-          { role: 'user', content: userMessage },
-        ],
-        temperature: LLM_CONFIG.TEMPERATURE,
-        max_tokens: LLM_CONFIG.MAX_TOKENS,
-        response_format: LLM_CONFIG.RESPONSE_FORMAT,
-      });
-
-      const content = completion.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error('LLM returned empty response');
-      }
-
-      const parsedResponse = JSON.parse(content);
-      const concepts = validateConceptsResponse(parsedResponse);
-
-      // Limit to conceptsPerSource (configurable via density)
-      const limitedConcepts = concepts.slice(0, conceptsPerSource);
-
-      console.log(`[SecondarySourceAgent] Extracted ${limitedConcepts.length} concepts from ${source.id}`);
-
-      // Convert to SecondarySourceNode
-      limitedConcepts.forEach((concept, index) => {
-        // Respect global cap
-        if (secondaryNodes.length < maxTotalConcepts) {
-          secondaryNodes.push({
-            id: `sec-${source.id}-${index + 1}`,
-            parentSourceId: source.id,
-            relatedBlockIds: relatedBlocks,
-            title: concept.title,
-            text: concept.text,
-            short_label: concept.short_label,
-            importance: concept.importance
-          });
-        }
-      });
-
-      successCount++;
-
-      // Early exit if we hit the global cap
+    for (let index = 0; index < Math.min(conceptsPerSource, concepts.length); index++) {
       if (secondaryNodes.length >= maxTotalConcepts) {
         console.log(`[SecondarySourceAgent] Reached global cap of ${maxTotalConcepts} concepts, stopping extraction`);
         break;
       }
 
-    } catch (error) {
-      failureCount++;
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.warn(`[SecondarySourceAgent] Failed to extract concepts from ${source.id}: ${errorMsg}`);
-      // Continue processing other sources
+      const concept = concepts[index];
+      secondaryNodes.push({
+        id: `sec-${source.id}-${index + 1}`,
+        parentSourceId: source.id,
+        relatedBlockIds: relatedBlocks,
+        title: concept.title,
+        text: concept.text,
+        short_label: concept.short_label,
+        importance: concept.importance
+      });
+    }
+
+    if (secondaryNodes.length >= maxTotalConcepts) {
+      break;
     }
   }
 

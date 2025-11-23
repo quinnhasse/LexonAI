@@ -18,6 +18,7 @@ dotenv.config({
 export interface Config {
   exaApiKey: string;
   llmApiKey: string;
+  llmModel: string;
   port: number;
   nodeEnv: string;
 }
@@ -26,6 +27,7 @@ export function loadConfig(): Config {
   const cfg = {
     exaApiKey: process.env.EXA_API_KEY || '',
     llmApiKey: process.env.LLM_API_KEY || '',
+    llmModel: process.env.LLM_MODEL || 'gpt-4o-mini',
     port: parseInt(process.env.PORT || '3001', 10),
     nodeEnv: process.env.NODE_ENV || 'development',
   };

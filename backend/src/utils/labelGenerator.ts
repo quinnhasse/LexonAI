@@ -289,6 +289,118 @@ function generateSimpleBlockLabel(blockText: string): string {
  * @returns Array of labels in same order
  */
 export async function generateAnswerBlockLabels(blockTexts: string[]): Promise<string[]> {
-  const promises = blockTexts.map(text => generateAnswerBlockLabel(text));
-  return Promise.all(promises);
+  if (blockTexts.length === 0) return [];
+
+  try {
+    return await generateBatchedBlockLabels(blockTexts);
+  } catch (error) {
+    console.warn(`[LabelGenerator] Batched label generation failed, falling back to single calls: ${error}`);
+    const labels = await Promise.all(blockTexts.map(text => generateAnswerBlockLabel(text)));
+    return labels;
+  }
+}
+
+/**
+ * Configuration for batched block label prompts
+ */
+const BATCH_LABEL_CONFIG = {
+  MAX_BLOCK_CHARS: 500,
+  MAX_TOKENS: 200,
+};
+
+/**
+ * Truncates block text for batched prompt to avoid blowing up token limits
+ */
+function truncateBlockForBatchLabel(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  const truncated = text.substring(0, maxChars);
+  const lastPeriod = truncated.lastIndexOf('.');
+  const lastNewline = truncated.lastIndexOf('\n');
+  const cutoff = Math.max(lastPeriod, lastNewline);
+  if (cutoff > maxChars * 0.7) {
+    return truncated.substring(0, cutoff + 1) + ' [...]';
+  }
+  return truncated + '...';
+}
+
+/**
+ * Cleans a label to meet constraints (1-3 words, no extra quotes)
+ */
+function cleanLabel(label: string): string {
+  const trimmed = (label || '').trim().replace(/^["']|["']$/g, '');
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 'Overview';
+  if (words.length <= 3) return trimmed;
+  return words.slice(0, 3).join(' ');
+}
+
+/**
+ * Builds the user prompt for batching block labels
+ */
+function buildBatchLabelPrompt(blocks: string[]): string {
+  const sanitizedBlocks: string[] = [];
+
+  for (let i = 0; i < blocks.length; i++) {
+    const truncated = truncateBlockForBatchLabel(blocks[i], BATCH_LABEL_CONFIG.MAX_BLOCK_CHARS);
+    sanitizedBlocks.push(`Block ${i + 1}:\n${truncated}`);
+  }
+
+  return `You will be given ${sanitizedBlocks.length} answer paragraphs.
+Provide a concise label of 1-3 words that summarizes each paragraph for a non-expert audience.
+Rules:
+- No punctuation.
+- No quotes.
+- Use title case or normal case.
+- Return ONLY a JSON object with this exact schema:
+{
+  "labels": [
+    "Label for Block 1",
+    "Label for Block 2",
+    ...
+  ]
+}
+Maintain the original block order.
+
+Input:
+${sanitizedBlocks.join('\n\n')}`;
+}
+
+/**
+ * Generates labels for multiple blocks in one LLM call
+ */
+async function generateBatchedBlockLabels(blockTexts: string[]): Promise<string[]> {
+  const client = getOpenAIClient();
+
+  const promptBlocks = buildBatchLabelPrompt(blockTexts);
+  const completion = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'user', content: promptBlocks }
+    ],
+    temperature: 0.3,
+    max_tokens: BATCH_LABEL_CONFIG.MAX_TOKENS,
+    response_format: { type: "json_object" as const },
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error('LLM returned empty batched label response');
+  }
+
+  const parsed = JSON.parse(content);
+  if (!Array.isArray(parsed.labels)) {
+    throw new Error('Batched label response missing labels array');
+  }
+
+  const labels = parsed.labels.map((label: unknown) => {
+    if (typeof label !== 'string') return 'Overview';
+    return cleanLabel(label);
+  });
+
+  if (labels.length < blockTexts.length) {
+    throw new Error('Batched label response returned fewer labels than input blocks');
+  }
+
+  // Keep order, but ensure we only return as many as requested
+  return labels.slice(0, blockTexts.length);
 }
