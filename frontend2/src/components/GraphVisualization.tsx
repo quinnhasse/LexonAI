@@ -457,8 +457,8 @@ export default function GraphVisualization({
           dampingFactor={0.05}
           rotateSpeed={0.5}
           zoomSpeed={0.8}
-          minDistance={10}
-          maxDistance={100}
+          minDistance={0}
+          maxDistance={500}
           mouseButtons={{
             LEFT: 2,   // Pan (was rotate)
             MIDDLE: 1, // Zoom
