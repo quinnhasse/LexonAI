@@ -6,6 +6,7 @@ import LandingPage from './components/LandingPage'
 import BackgroundNetworkSphere from './components/BackgroundNetworkSphere'
 import { ControlsPanel } from './components/controls/ControlsPanel'
 import { LoadingOverlay } from './components/LoadingOverlay'
+import ColorLegend from './components/ColorLegend'
 import { Node, Edge, ReasoningResponse, LayoutMode, ColorMode } from './types'
 import { transformResponseToGraph } from './utils/graphTransform'
 import { askQuestion, ApiError } from './services/api'
@@ -337,6 +338,9 @@ function App() {
           onColorModeChange={setColorMode}
         />
       )}
+
+      {/* Color legend - appears after graph loads, hidden in white mode */}
+      {showControls && <ColorLegend colorMode={colorMode} />}
 
       {/* Question input - moves to top after first question */}
       {hasAskedQuestion && (
