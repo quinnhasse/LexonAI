@@ -32,6 +32,11 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedNode, sidebarExpanded])
 
+  const handleNodeClick = (node: Node) => {
+    setSelectedNode(node)
+    setSidebarExpanded(true) // Auto-open sidebar when node is clicked
+  }
+
   const handleQuestionSubmit = async (question: string) => {
     setHasAskedQuestion(true)
     setIsLoading(true)
@@ -148,7 +153,7 @@ function App() {
         highlightedNodes={highlightedNodes}
         layoutMode={layoutMode}
         colorMode={colorMode}
-        onNodeClick={setSelectedNode}
+        onNodeClick={handleNodeClick}
         onInteraction={() => setIsPromptDimmed(true)}
       />
 
