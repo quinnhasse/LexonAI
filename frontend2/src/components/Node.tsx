@@ -1,14 +1,16 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Sphere, Text } from '@react-three/drei'
 import { Mesh, Group } from 'three'
-import { Node as GraphNode } from '../types'
+import { Node as GraphNode, ColorMode } from '../types'
+import { colorEngine } from '../utils/colorPalettes'
 
 interface NodeProps {
   node: GraphNode
   isHighlighted: boolean
   onClick: () => void
   animationProgress: number // 0 to 1
+  colorMode?: ColorMode
 }
 
 const nodeTypeConfig = {
@@ -19,7 +21,7 @@ const nodeTypeConfig = {
     emissiveColor: '#e0e0e0', // soft white glow
   },
   answer_root: {
-    color: '#ffff00', // yellow
+    color: '#ffffff', // yellow
     radius: 2.5,
     emissiveIntensity: 0.5,
     emissiveColor: '#ffff00', // yellow glow
@@ -31,20 +33,20 @@ const nodeTypeConfig = {
     emissiveColor: '#a0a0a0', // soft grey glow
   },
   direct_source: {
-    color: '#808080', // medium grey
+    color: '#b0b0b0', // medium grey
     radius: 0.6,
     emissiveIntensity: 0.15,
     emissiveColor: '#707070', // subtle grey glow
   },
   secondary_source: {
-    color: '#505050', // dark grey
+    color: '#b0b0b0', // dark grey
     radius: 0.4,
     emissiveIntensity: 0.1,
     emissiveColor: '#606060', // very subtle glow
   },
 }
 
-export default function Node({ node, isHighlighted, onClick, animationProgress }: NodeProps) {
+export default function Node({ node, isHighlighted, onClick, animationProgress, colorMode = 'white' }: NodeProps) {
   const meshRef = useRef<Mesh>(null)
   const wireframeRef = useRef<Mesh>(null)
   const textRef = useRef<Group>(null)
@@ -52,13 +54,22 @@ export default function Node({ node, isHighlighted, onClick, animationProgress }
   const currentScaleRef = useRef(1) // Track current interpolated scale
   const { camera } = useThree()
 
-  const config = nodeTypeConfig[node.type]
-
   // Target scale based on state
   const targetBaseScale = hovered ? 1.2 : isHighlighted ? 1.1 : 1
   const animScale = animationProgress < 1
     ? animationProgress * (1 + (1 - animationProgress) * 0.3) // Overshoot then settle
     : 1
+
+  // Get color based on color mode
+  const baseConfig = nodeTypeConfig[node.type]
+  const nodeColor = useMemo(() => {
+    if (colorMode === 'white') {
+      return baseConfig.color
+    }
+    return colorEngine.getNodeColor(node, colorMode)
+  }, [node, colorMode, baseConfig.color])
+
+  const config = { ...baseConfig, color: nodeColor }
 
   useFrame((state) => {
     if (meshRef.current) {
@@ -93,9 +104,25 @@ export default function Node({ node, isHighlighted, onClick, animationProgress }
 
   const scale = currentScaleRef.current
 
-  // Get display text - use displayHeading if available, otherwise fallback to label
+  // Get display text - prioritize short labels for better visualization
   const getDisplayText = (): string => {
-    return node.displayHeading || node.label || 'Node'
+    // 1. First try shortLabel (1-3 words, ideal for viz)
+    if (node.shortLabel) return node.shortLabel
+
+    // 2. Then try displayHeading
+    if (node.displayHeading) return node.displayHeading
+
+    // 3. Truncate label to first 3 words if it's long
+    if (node.label) {
+      const words = node.label.split(' ')
+      if (words.length > 3) {
+        return words.slice(0, 3).join(' ') + '...'
+      }
+      return node.label
+    }
+
+    // 4. Fallback (should rarely happen)
+    return 'Untitled'
   }
 
   return (
@@ -140,8 +167,9 @@ export default function Node({ node, isHighlighted, onClick, animationProgress }
       <mesh ref={wireframeRef} scale={scale} renderOrder={1}>
         <sphereGeometry args={[config.radius, 12, 8]} />
         <meshBasicMaterial
-          color="#808080"
+          color={nodeColor}
           wireframe
+          transparent
           opacity={(isHighlighted ? 0.7 : 0.4) * animationProgress}
         />
       </mesh>
@@ -151,7 +179,7 @@ export default function Node({ node, isHighlighted, onClick, animationProgress }
         <mesh scale={scale * (1.2 + (1 - animationProgress) * 0.5)}>
           <sphereGeometry args={[config.radius, 12, 8]} />
           <meshBasicMaterial
-            color="#ffffff"
+            color={nodeColor}
             transparent
             opacity={(1 - animationProgress) * 0.4}
             wireframe
@@ -176,7 +204,7 @@ export default function Node({ node, isHighlighted, onClick, animationProgress }
           outlineColor="#000000"
           maxWidth={node.type === 'question' || node.type === 'answer_root' ? 8 : node.type === 'answer_block' ? 5 : 3}
           renderOrder={999}
-          fillOpacity={animationProgress}
+          fillOpacity={Math.min(animationProgress * 1.2, 1.0)}
         >
           {getDisplayText()}
         </Text>

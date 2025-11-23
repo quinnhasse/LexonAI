@@ -1,10 +1,11 @@
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
-import { Node as GraphNode, Edge as EdgeType } from '../types'
+import { Node as GraphNode, Edge as EdgeType, LayoutMode, ColorMode } from '../types'
 import Node from './Node'
 import Edge from './Edge'
 import { useEffect, useState, useRef } from 'react'
 import { calculateHierarchicalLayout } from '../utils/graphLayout'
+import { layoutEngine } from '../utils/layoutEngine'
 import './GraphVisualization.css'
 import { Vector3, Frustum, Matrix4, Group } from 'three'
 import { getNodeRadius } from '../utils/nodeVisuals'
@@ -16,6 +17,8 @@ interface GraphVisualizationProps {
   nodes: GraphNode[]
   edges: EdgeType[]
   highlightedNodes: Set<string>
+  layoutMode?: LayoutMode
+  colorMode?: ColorMode
   onNodeClick: (node: GraphNode) => void
   onInteraction: () => void
 }
@@ -118,6 +121,41 @@ function IdleRotation({
   return null
 }
 
+// Apply layout based on selected mode
+const applyLayout = (
+  nodes: GraphNode[],
+  edges: EdgeType[],
+  mode: LayoutMode = 'cluster'
+): GraphNode[] => {
+  // Map UI modes to actual layout implementations
+  switch (mode) {
+    case 'cluster':
+      // Hierarchical grouped structure (spherical shells with angular clustering)
+      return calculateHierarchicalLayout(nodes, edges)
+
+    case 'circular':
+      // Flat 2D concentric rings (Game of Thrones style)
+      const circularPositions = layoutEngine.calculatePositions(nodes, 'circular')
+      return nodes.map(node => ({
+        ...node,
+        position: circularPositions.get(node.id) || node.position || [0, 0, 0]
+      }))
+
+    case 'globe':
+      // 3D spherical surface distribution (Fibonacci sphere)
+      const globePositions = layoutEngine.calculatePositions(nodes, 'globe')
+      return nodes.map(node => ({
+        ...node,
+        position: globePositions.get(node.id) || node.position || [0, 0, 0]
+      }))
+
+    case 'flat':
+    default:
+      // Baseline/fallback layout (same as cluster for now)
+      return calculateHierarchicalLayout(nodes, edges)
+  }
+}
+
 // Prune semantic edges to prevent visual overload
 const pruneSemanticEdges = (
   edges: EdgeType[],
@@ -191,6 +229,8 @@ export default function GraphVisualization({
   nodes,
   edges,
   highlightedNodes,
+  layoutMode = 'flat',
+  colorMode = 'white',
   onNodeClick,
   onInteraction,
 }: GraphVisualizationProps) {
@@ -213,8 +253,8 @@ export default function GraphVisualization({
 
   useEffect(() => {
     if (nodes.length > 0) {
-      // Pass edges to layout function for clustering logic
-      const positioned = calculateHierarchicalLayout(nodes, edges)
+      // Apply layout based on selected mode
+      const positioned = applyLayout(nodes, edges, layoutMode)
       setPositionedNodes(positioned)
 
       // Prune semantic edges to prevent visual overload
@@ -241,7 +281,7 @@ export default function GraphVisualization({
       startAnimationSequence(positioned, pruned)
       setParticlePulseTrigger(0)
     }
-  }, [nodes, edges])
+  }, [nodes, edges, layoutMode])
 
   // Pulse scheduler for traveling particles
   useEffect(() => {
@@ -620,6 +660,7 @@ export default function GraphVisualization({
                 isHighlighted={highlightedNodes.has(node.id)}
                 onClick={() => onNodeClick(node)}
                 animationProgress={progress}
+                colorMode={colorMode}
               />
             )
           })}

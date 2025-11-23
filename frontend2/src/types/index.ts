@@ -7,6 +7,7 @@ export interface GraphNode {
   type: NodeType;
   label: string;
   displayHeading?: string; // Short heading for 3D graph display (max 3 words)
+  shortLabel?: string; // Very short label (1-3 words) prioritized for visualization
   position?: [number, number, number];
   metadata: {
     layer: number;
@@ -131,5 +132,27 @@ export interface ReasoningResponse {
   meta?: {
     requestId?: string;
     processingTimeMs?: number;
+  };
+}
+
+// Layout and visualization modes
+export type LayoutMode = 'cluster' | 'circular' | 'flat' | 'globe';
+export type ColorMode = 'white' | 'byLevel' | 'byRole' | 'byTier';
+
+export interface LayoutConfig {
+  mode: LayoutMode;
+  spacing: number;
+  radius: number;
+  clusterSeparation?: number;
+}
+
+export interface ColorConfig {
+  mode: ColorMode;
+  palette: {
+    level1?: string;
+    level2?: string;
+    level3?: string;
+    level4?: string;
+    default: string;
   };
 }
