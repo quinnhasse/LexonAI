@@ -28,16 +28,23 @@
 
 /* Lexon title - Military/tech typography */
 .landing-title {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 72px;
-  font-weight: 700;
+  font-weight: 300;
   color: #ffffff;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.05em;
   margin: 0;
   text-align: center;
   line-height: 1;
-  /* Subtle text shadow for depth */
-  text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  /* Enhanced text effects: soft glow + depth shadow */
+  text-shadow:
+    0 0 30px rgba(255, 255, 255, 0.4),
+    0 0 60px rgba(255, 255, 255, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.8);
+  /* Add z-index to ensure it rises behind search bar */
+  position: relative;
+  z-index: 1;
 }
 
 /* Search bar container */

@@ -8,7 +8,7 @@
  * - Center-aligned content block
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface LoadingOverlayProps {
@@ -17,6 +17,18 @@ interface LoadingOverlayProps {
   status?: string;   // Status message (e.g., "Searching neural networks")
 }
 
+// Loading messages that cycle consistently
+const LOADING_MESSAGES = [
+  'Searching knowledge networks...',
+  'Analyzing sources...',
+  'Building evidence graph...',
+  'Verifying information...',
+  'Connecting data points...',
+  'Synthesizing answer...',
+  'Tracing citations...',
+  'Mapping relationships...'
+];
+
 export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   visible,
   progress,
@@ -24,6 +36,30 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
 }) => {
   const SEGMENT_COUNT = 30;
   const filledSegments = Math.round((SEGMENT_COUNT * progress) / 100);
+
+  // Client-side message rotation
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const [displayMessage, setDisplayMessage] = useState(LOADING_MESSAGES[0]);
+
+  useEffect(() => {
+    if (!visible) {
+      // Reset when overlay is hidden
+      setCurrentMessageIndex(0);
+      setDisplayMessage(LOADING_MESSAGES[0]);
+      return;
+    }
+
+    // Rotate messages every 1.8 seconds (1800ms)
+    const interval = setInterval(() => {
+      setCurrentMessageIndex((prevIndex) => {
+        const nextIndex = (prevIndex + 1) % LOADING_MESSAGES.length;
+        setDisplayMessage(LOADING_MESSAGES[nextIndex]);
+        return nextIndex;
+      });
+    }, 1800);
+
+    return () => clearInterval(interval);
+  }, [visible]);
 
   return (
     <AnimatePresence>
@@ -81,17 +117,40 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
               Lexon
             </div>
 
-            {/* Status text */}
+            {/* Status text with slide-up animation */}
             <div
               style={{
-                fontSize: '13px',
-                fontWeight: 300,
-                color: '#999',
                 marginTop: '8px',
-                marginBottom: '4px'
+                marginBottom: '4px',
+                overflow: 'hidden',
+                height: '18px',
+                position: 'relative',
+                width: '100%'
               }}
             >
-              {status}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={displayMessage}
+                  initial={{ y: 18, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -18, opacity: 0 }}
+                  transition={{
+                    duration: 0.4,
+                    ease: [0.4, 0, 0.2, 1]
+                  }}
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    fontSize: '13px',
+                    fontWeight: 300,
+                    color: '#999',
+                    top: 0,
+                    left: 0
+                  }}
+                >
+                  {displayMessage}
+                </motion.div>
+              </AnimatePresence>
             </div>
 
             {/* Progress percentage and label */}

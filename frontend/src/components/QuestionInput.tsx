@@ -1,5 +1,5 @@
-import { useState, FormEvent } from 'react'
-import { motion } from 'framer-motion'
+import { useState, FormEvent, useRef } from 'react'
+import { motion, useAnimation } from 'framer-motion'
 import './QuestionInput.css'
 
 interface QuestionInputProps {
@@ -20,10 +20,17 @@ export default function QuestionInput({
   const [question, setQuestion] = useState('')
   const [lastSubmittedQuestion, setLastSubmittedQuestion] = useState('')
   const [questionBeforeFocus, setQuestionBeforeFocus] = useState('')
+  const buttonControls = useAnimation()
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (question.trim() && !isLoading) {
+      // Trigger button press animation
+      await buttonControls.start({
+        scale: [1, 0.9, 1],
+        transition: { duration: 0.2, ease: 'easeInOut' }
+      })
+
       onSubmit(question)
       setLastSubmittedQuestion(question)
       // Keep the question visible in the input after submission
@@ -89,10 +96,13 @@ export default function QuestionInput({
           className="question-input"
           disabled={isLoading}
         />
-        <button
+        <motion.button
           type="submit"
           className="submit-button"
           disabled={isLoading || !question.trim()}
+          animate={buttonControls}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
           {isLoading ? (
             <span className="loader"></span>
@@ -112,7 +122,7 @@ export default function QuestionInput({
               <polyline points="12 5 19 12 12 19"></polyline>
             </svg>
           )}
-        </button>
+        </motion.button>
       </form>
     </motion.div>
   )

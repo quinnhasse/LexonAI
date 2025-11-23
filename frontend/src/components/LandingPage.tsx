@@ -39,14 +39,20 @@ export default function LandingPage({
   return (
     <div className="landing-page">
       <div className="landing-content">
-        {/* Main app title - fades out when question is asked */}
+        {/* Main app title - rises up from behind search bar, then fades out when question is asked */}
         <motion.h1
           className="landing-title"
-          initial={{ opacity: 1 }}
-          animate={{ opacity: hasAskedQuestion ? 0 : 1 }}
+          initial={{ opacity: 0, y: 80 }}
+          animate={{
+            opacity: hasAskedQuestion ? 0 : 1,
+            y: hasAskedQuestion ? 0 : 0
+          }}
           transition={{
-            duration: 0.5,
+            duration: 1.2,
             ease: [0.4, 0, 0.2, 1],
+            type: "spring",
+            damping: 20,
+            stiffness: 100,
           }}
         >
           Lexon

@@ -104,11 +104,21 @@ function NetworkSphereScene() {
     return { nodes: generatedNodes, edges: generatedEdges }
   }, [])
 
-  // Slow continuous rotation
-  useFrame(() => {
+  // Slow continuous rotation with subtle bobbing motion
+  useFrame(({ clock }) => {
     if (groupRef.current) {
+      const time = clock.getElapsedTime()
+
       // Rotate at 0.1 RPM (one full rotation per 10 seconds)
       groupRef.current.rotation.y += 0.001
+
+      // Subtle bobbing motion: gentle Y-axis oscillation
+      // Frequency: 0.5 (slow bobbing), Amplitude: 0.15 (subtle movement)
+      groupRef.current.position.y = Math.sin(time * 0.5) * 0.15
+
+      // Add very subtle X-axis oscillation for more natural movement
+      // Phase shifted by PI/2 for figure-8 style motion
+      groupRef.current.position.x = Math.cos(time * 0.5) * 0.1
     }
   })
 
@@ -151,7 +161,7 @@ export default function BackgroundNetworkSphere({
   return (
     <motion.div
       className="background-network-sphere"
-      initial={{ x: 0, y: 0, opacity: 0.6 }}
+      initial={{ x: '100vw', y: 0, opacity: 0 }}
       animate={
         hasAskedQuestion
           ? {
@@ -166,7 +176,8 @@ export default function BackgroundNetworkSphere({
             }
       }
       transition={{
-        duration: 1.2,
+        duration: 1.5,
+        delay: hasAskedQuestion ? 0 : 0.5,
         ease: [0.4, 0, 0.2, 1],
       }}
     >
