@@ -429,8 +429,8 @@ export async function answerAgent(
   const systemMessage = buildSystemMessage();
   const userMessage = buildUserMessage(question, formattedSources);
   const promptMessages = [
-    { role: 'system', content: systemMessage },
-    { role: 'user', content: userMessage },
+    { role: 'system' as const, content: systemMessage },
+    { role: 'user' as const, content: userMessage },
   ];
   console.log(`\n\n${JSON.stringify(promptMessages)}\n\n`);
   logPromptUsage('Prompt payload', promptMessages, formattedSources.length, sources.length);
