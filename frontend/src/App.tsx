@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import QuestionInput from './components/QuestionInput'
 import GraphVisualization from './components/GraphVisualization'
+import KnowledgeDeck from './components/KnowledgeDeck'
 import Sidebar from './components/Sidebar'
 import LandingPage from './components/LandingPage'
 import BackgroundNetworkSphere from './components/BackgroundNetworkSphere'
-import { ControlsPanel } from './components/controls/ControlsPanel'
+import { LayoutControls } from './components/controls/LayoutControls'
 import { LoadingOverlay } from './components/LoadingOverlay'
 import ColorLegend from './components/ColorLegend'
 import { Node, Edge, ReasoningResponse, LayoutMode, ColorMode } from './types'
@@ -27,9 +28,19 @@ function App() {
   const [colorMode, setColorMode] = useState<ColorMode>('byLevel')
   const [showControls, setShowControls] = useState(false)
 
+  // Spotlight State
+  const [lockedSpotlight, setLockedSpotlight] = useState<string | null>(null)
+  const [hoveredSpotlight, setHoveredSpotlight] = useState<string | null>(null)
+  const activeSpotlight = hoveredSpotlight || lockedSpotlight
+
+  const handleHoverType = (type: string | null) => setHoveredSpotlight(type)
+  const handleToggleType = (type: string) => {
+    setLockedSpotlight(prev => prev === type ? null : type)
+  }
+
   // Loading overlay state
-  const [backendProgress, setBackendProgress] = useState(0)  // Actual backend progress
-  const [displayProgress, setDisplayProgress] = useState(0)  // Smoothly animated progress
+  const [backendProgress, setBackendProgress] = useState(0)
+  const [displayProgress, setDisplayProgress] = useState(0)
   const [loadingStatus, setLoadingStatus] = useState('Thinking...')
   const pollingIntervalRef = useRef<number | null>(null)
   const pollingFailureCountRef = useRef(0)
@@ -39,17 +50,23 @@ function App() {
   // Handle ESC key to collapse sidebar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedNode && sidebarExpanded) {
-        setSidebarExpanded(false)
+      if (e.key === 'Escape') {
+        if (selectedNode && sidebarExpanded) {
+          setSidebarExpanded(false)
+        }
+        // Clear spotlight on escape if locked
+        if (lockedSpotlight) {
+          setLockedSpotlight(null)
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedNode, sidebarExpanded])
+  }, [selectedNode, sidebarExpanded, lockedSpotlight])
 
   const handleNodeClick = (node: Node) => {
     setSelectedNode(node)
-    setSidebarExpanded(true) // Auto-open sidebar when node is clicked
+    setSidebarExpanded(true) 
   }
 
   // Clean up polling intervals
@@ -74,43 +91,37 @@ function App() {
     smoothProgressIntervalRef.current = window.setInterval(() => {
       setDisplayProgress((currentDisplay) => {
         setBackendProgress((currentBackend) => {
-          // Calculate target: stay slightly ahead of backend but cap at 95% unless complete
           const targetProgress = currentBackend >= 100
             ? 100
             : Math.min(currentBackend + 5, 95)
 
-          // If we're already at or past target, don't increment
           if (currentDisplay >= targetProgress) {
-            return currentBackend // Return backend unchanged
+            return currentBackend 
           }
 
-          // Calculate increment based on distance to target
           const distance = targetProgress - currentDisplay
           const increment = distance > 20 ? 0.8 : distance > 10 ? 0.5 : 0.3
-
-          // Return new display progress (monotonic - never decrease)
           const newDisplay = Math.min(currentDisplay + increment, targetProgress)
 
-          // Update display progress through parent setter
           setTimeout(() => setDisplayProgress(newDisplay), 0)
 
-          return currentBackend // Return backend unchanged
+          return currentBackend
         })
 
-        return currentDisplay // This will be overridden by setTimeout above
+        return currentDisplay 
       })
-    }, 50) // Update every 50ms for smooth animation
+    }, 50) 
   }
 
   // Start synthetic progress animation (fallback)
   const startSyntheticProgress = () => {
     const startTime = Date.now()
-    const duration = 10000 // 10 seconds to reach 90%
+    const duration = 10000 
 
     syntheticProgressIntervalRef.current = window.setInterval(() => {
       const elapsed = Date.now() - startTime
       const progress = Math.min(90, (elapsed / duration) * 90)
-      setBackendProgress(progress) // Update backend progress, smooth animation will catch up
+      setBackendProgress(progress) 
     }, 100)
   }
 
@@ -124,8 +135,6 @@ function App() {
 
         if (!response.ok) {
           pollingFailureCountRef.current++
-
-          // After 3 failures, switch to synthetic progress
           if (pollingFailureCountRef.current >= 3) {
             console.warn('Progress polling failed 3 times, switching to synthetic progress')
             if (pollingIntervalRef.current) {
@@ -138,14 +147,12 @@ function App() {
         }
 
         const data = await response.json()
-        pollingFailureCountRef.current = 0 // Reset failure count on success
+        pollingFailureCountRef.current = 0 
 
-        setBackendProgress(data.progress) // Update backend value, smooth animation will catch up
+        setBackendProgress(data.progress) 
         setLoadingStatus(data.status)
       } catch (error) {
         pollingFailureCountRef.current++
-
-        // After 3 failures, switch to synthetic progress
         if (pollingFailureCountRef.current >= 3) {
           console.warn('Progress polling failed 3 times, switching to synthetic progress')
           if (pollingIntervalRef.current) {
@@ -155,11 +162,10 @@ function App() {
           startSyntheticProgress()
         }
       }
-    }, 300) // Poll every 300ms
+    }, 300) 
   }
 
   const handleQuestionSubmit = async (question: string) => {
-    // Generate unique job ID for this request
     const jobId = uuidv4()
 
     setHasAskedQuestion(true)
@@ -167,85 +173,66 @@ function App() {
     setNodes([])
     setEdges([])
     setHighlightedNodes(new Set())
-    setSelectedNode(null) // Clear previous selection
-    setSidebarExpanded(false) // Collapse sidebar
-    setShowControls(false) // Hide controls during loading
+    setSelectedNode(null) 
+    setSidebarExpanded(false) 
+    setShowControls(false) 
 
-    // Reset progress state
     setBackendProgress(0)
     setDisplayProgress(0)
     setLoadingStatus('Starting...')
     cleanupPolling()
 
-    // Start smooth progress animation
     startSmoothProgress()
-
-    // Start progress polling
     startProgressPolling(jobId)
 
     try {
-      // Call backend API with jobId for progress tracking
       const data = await askQuestion(question, jobId)
       console.log('✅ API Response:', data)
       setIsDemoMode(false)
 
-      // Instantly jump to 100% and hide overlay - let user see graph forming!
       setBackendProgress(100)
-      setDisplayProgress(100)  // Instant jump, no waiting for smooth animation
+      setDisplayProgress(100) 
       setLoadingStatus('Ready')
       cleanupPolling()
 
-      // Brief flash of 100% state, then immediately show graph
       setTimeout(() => {
         setIsLoading(false)
       }, 150)
 
-      // Transform API response to graph data
       const graphData = transformResponseToGraph(data)
       setNodes(graphData.nodes)
       setEdges(graphData.edges)
 
-      // Find and auto-select the answer root node with animation
       const answerRootNode = graphData.nodes.find(n => n.type === 'answer_root')
       if (answerRootNode) {
         setSelectedNode(answerRootNode)
-        setSidebarExpanded(false) // Start collapsed
-        // Expand after a short delay to trigger transition animation
+        setSidebarExpanded(false) 
         setTimeout(() => {
           setSidebarExpanded(true)
         }, 100)
       }
 
-      // Highlight all nodes after a short delay
       setTimeout(() => {
         const allNodeIds = new Set(graphData.nodes.map(n => n.id))
         setHighlightedNodes(allNodeIds)
       }, 500)
 
-      // Show controls after nodes start animating
       setTimeout(() => {
         setShowControls(true)
       }, 800)
     } catch (error) {
-      // Backend is unavailable or failed - fall back to demo data
       console.warn('⚠️ Backend unavailable, loading demo data...')
-      console.warn('💡 This happens when:')
-      console.warn('   - Backend server is not running')
-      console.warn('   - Missing API keys (EXA_API_KEY or LLM_API_KEY)')
-      console.warn('   - Network connectivity issues')
-
+      
       if (error instanceof ApiError) {
         console.error('API Error Details:', error.message, error.status)
       }
 
-      // Instantly jump to 100% for demo mode too
       setBackendProgress(100)
       setDisplayProgress(100)
       setLoadingStatus('Ready')
       cleanupPolling()
 
       try {
-        // Load the example response as fallback
         const exampleResponse = await fetch('/examples/example-response.json')
         if (!exampleResponse.ok) {
           throw new Error('Failed to load demo data')
@@ -255,40 +242,33 @@ function App() {
         console.log('📊 Loaded demo data successfully')
         setIsDemoMode(true)
 
-        // Transform example data to graph
         const graphData = transformResponseToGraph(data)
         setNodes(graphData.nodes)
         setEdges(graphData.edges)
 
-        // Brief flash of 100%, then show graph
         setTimeout(() => {
           setIsLoading(false)
         }, 150)
 
-        // Find and auto-select the answer root node with animation
         const answerRootNode = graphData.nodes.find(n => n.type === 'answer_root')
         if (answerRootNode) {
           setSelectedNode(answerRootNode)
-          setSidebarExpanded(false) // Start collapsed
-          // Expand after a short delay to trigger transition animation
+          setSidebarExpanded(false) 
           setTimeout(() => {
             setSidebarExpanded(true)
           }, 100)
         }
 
-        // Highlight all nodes after a short delay
         setTimeout(() => {
           const allNodeIds = new Set(graphData.nodes.map(n => n.id))
           setHighlightedNodes(allNodeIds)
         }, 500)
 
-        // Show controls after nodes start animating (fallback/demo mode)
         setTimeout(() => {
           setShowControls(true)
         }, 800)
       } catch (fallbackError) {
         console.error('❌ Failed to load demo data:', fallbackError)
-        console.error('Make sure /public/examples/example-response.json exists')
         setIsLoading(false)
       }
     }
@@ -301,17 +281,14 @@ function App() {
 
   return (
     <div className="app">
-      {/* Loading overlay - appears during query processing */}
       <LoadingOverlay
         visible={isLoading}
         progress={displayProgress}
         status={loadingStatus}
       />
 
-      {/* Background sphere - always visible, subtle in background, slides away when question asked */}
       <BackgroundNetworkSphere hasAskedQuestion={hasAskedQuestion} />
 
-      {/* Landing page - only visible before first question */}
       {!hasAskedQuestion && (
         <LandingPage
           onQuestionSubmit={handleQuestionSubmit}
@@ -320,8 +297,7 @@ function App() {
         />
       )}
 
-      {/* Graph visualization - appears after question is asked */}
-      {hasAskedQuestion && (
+      {hasAskedQuestion && layoutMode !== 'deck' && (
         <GraphVisualization
           nodes={nodes}
           edges={edges}
@@ -331,23 +307,38 @@ function App() {
           onNodeClick={handleNodeClick}
           onInteraction={() => setIsPromptDimmed(true)}
           isDemoMode={isDemoMode}
+          activeSpotlight={activeSpotlight}
         />
       )}
 
-      {/* Controls panel - appears after graph loads */}
+      {hasAskedQuestion && layoutMode === 'deck' && (
+        <KnowledgeDeck
+          nodes={nodes}
+          edges={edges}
+          onNodeClick={handleNodeClick}
+          highlightedNodes={highlightedNodes}
+          activeSpotlight={activeSpotlight}
+        />
+      )}
+
       {showControls && (
-        <ControlsPanel
-          layoutMode={layoutMode}
-          onLayoutModeChange={setLayoutMode}
+        <LayoutControls 
+          mode={layoutMode} 
+          onChange={setLayoutMode}
           colorMode={colorMode}
           onColorModeChange={setColorMode}
         />
       )}
 
-      {/* Color legend - appears after graph loads, hidden in white mode */}
-      {showControls && <ColorLegend colorMode={colorMode} />}
+      {showControls && (
+        <ColorLegend 
+          colorMode={colorMode} 
+          onHoverType={handleHoverType}
+          onToggleType={handleToggleType}
+          activeSpotlight={activeSpotlight}
+        />
+      )}
 
-      {/* Question input - moves to top after first question */}
       {hasAskedQuestion && (
         <QuestionInput
           onSubmit={handleQuestionSubmit}
@@ -358,7 +349,6 @@ function App() {
         />
       )}
 
-      {/* Sidebar - appears when node is selected */}
       <Sidebar
         node={selectedNode}
         isExpanded={sidebarExpanded}

@@ -16,6 +16,14 @@ export const COLORS = {
   SURFACE: '#0a0a0a',
 };
 
+// Strict Semantic Palette
+export const SEMANTIC_COLORS = {
+  QUERY: '#EF4444',    // Red-500 (Answer/Root)
+  LOGIC: '#EAB308',    // Yellow-500 (Answer Chunks - Gold/Mustard)
+  EVIDENCE: '#14B8A6', // Teal-500 (Direct Sources - Cyan/Teal)
+  CONTEXT: '#22C55E',  // Green-500 (Concepts)
+};
+
 export const BUTTON_STYLES = {
   // Selected state (active) - military inverted style
   SELECTED_BG: '#ffffff',
@@ -34,14 +42,14 @@ export const BUTTON_STYLES = {
 
 export const PANEL_STYLES = {
   // Controls panel background - minimal, tactical
-  BG: '#000000',
-  BORDER: '#333333',
-  BLUR: 'none',
+  BG: 'rgba(10, 10, 10, 0.9)', // bg-black/90
+  BORDER: 'rgba(255, 255, 255, 0.1)', // border-white/10
+  BLUR: '12px', // backdrop-blur-md
 
   // Positioning
   TOP: '16px',
   LEFT: '16px',
-  BORDER_RADIUS: '0px',
+  BORDER_RADIUS: '8px', // rounded-lg
   PADDING: '12px',
 };
 
@@ -53,7 +61,7 @@ export const getButtonStyle = (isSelected: boolean) => ({
   border: `1px solid ${isSelected ? BUTTON_STYLES.SELECTED_BORDER : BUTTON_STYLES.UNSELECTED_BORDER}`,
   color: isSelected ? BUTTON_STYLES.SELECTED_TEXT : BUTTON_STYLES.UNSELECTED_TEXT,
   padding: '8px 12px',
-  borderRadius: '0px',
+  borderRadius: '4px', // Slightly rounded
   cursor: 'pointer',
   transition: 'all 0.15s ease',
 });

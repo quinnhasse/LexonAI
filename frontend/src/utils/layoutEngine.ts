@@ -29,9 +29,9 @@ export class LayoutEngine {
       case 'globe':
         return this.globeLayout(nodes, effectiveConfig);
       case 'flat':
-        return this.flatLayout(nodes, effectiveConfig);
+        return this.baselineLayout(nodes, effectiveConfig); // Using baseline layout for 'flat' mode
       default:
-        return this.flatLayout(nodes, effectiveConfig);
+        return this.baselineLayout(nodes, effectiveConfig);
     }
   }
 
@@ -159,23 +159,52 @@ export class LayoutEngine {
     return positions;
   }
 
-  private flatLayout(
+  private baselineLayout(
     nodes: GraphNode[],
     config: LayoutConfig
   ): Map<string, [number, number, number]> {
     const positions = new Map<string, [number, number, number]>();
-    const { spacing } = config;
+    const { spacing } = config; // Spacing between grid items
+    const COLS = 10; // Number of columns
 
-    // Simple grid layout for flat view
-    const gridSize = Math.ceil(Math.sqrt(nodes.length));
+    // 1. Sort nodes by layer (and maybe type within layer)
+    // Order: Layer 0 (Question/Root) -> Layer 1 (Answers) -> Layer 3 (Concepts) -> Layer 2 (Sources)
+    // This logic groups them logically top-to-bottom
+    const sortedNodes = [...nodes].sort((a, b) => {
+      const layerA = a.metadata.layer || 0;
+      const layerB = b.metadata.layer || 0;
+      
+      // Custom sort order preference: 0 -> 1 -> 3 -> 2
+      // We want Concepts (3) before Sources (2) usually, or strict numerical 0,1,2,3?
+      // Let's do strict numerical for "Baseline" to keep it simple: 0, 1, 2, 3
+      if (layerA !== layerB) {
+        return layerA - layerB;
+      }
+      
+      // Secondary sort: Type
+      if (a.type !== b.type) {
+        return a.type.localeCompare(b.type);
+      }
+      
+      return 0;
+    });
 
-    nodes.forEach((node, index) => {
-      const row = Math.floor(index / gridSize);
-      const col = index % gridSize;
+    // 2. Calculate Grid Positions
+    const totalWidth = (Math.min(sortedNodes.length, COLS) - 1) * spacing;
+    
+    sortedNodes.forEach((node, index) => {
+      const col = index % COLS;
+      const row = Math.floor(index / COLS);
 
-      const x = (col - gridSize / 2) * spacing;
-      const z = (row - gridSize / 2) * spacing;
-      const y = 0; // Flat on XZ plane
+      // Calculate X: Centered horizontally
+      const x = (col * spacing) - (totalWidth / 2);
+      
+      // Calculate Y: Start from top (0) and go down (negative)
+      // Add some initial offset if needed
+      const y = -(row * spacing) + 10; // +10 to start a bit higher
+      
+      // Calculate Z: Flat
+      const z = 0;
 
       positions.set(node.id, [x, y, z]);
     });

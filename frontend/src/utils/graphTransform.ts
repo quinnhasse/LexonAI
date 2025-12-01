@@ -43,12 +43,37 @@ export function transformResponseToGraph(response: ReasoningResponse): GraphData
     displayHeading: computeDisplayHeading(node),
   }));
 
-  // Normalize edges to have both from/to and source/target for compatibility
-  const normalizedEdges: Edge[] = edges.map(edge => ({
-    ...edge,
-    source: edge.from,
-    target: edge.to,
-  }));
+  // Create a map of node types for edge analysis
+  const nodeTypeMap = new Map<string, string>();
+  enhancedNodes.forEach(node => {
+    nodeTypeMap.set(node.id, node.type);
+  });
+
+  // Normalize edges and assign criticality
+  const normalizedEdges: Edge[] = edges.map(edge => {
+    const sourceType = nodeTypeMap.get(edge.from);
+    const targetType = nodeTypeMap.get(edge.to);
+
+    let criticality = 0.3; // Default weak
+    let isCritical = false;
+
+    // Critical Path Logic
+    const isRootToAnswer = (sourceType === 'question' || sourceType === 'answer_root') && (targetType === 'answer_root' || targetType === 'answer_block');
+    const isAnswerToSource = (sourceType === 'answer_block' || sourceType === 'answer_root') && targetType === 'direct_source';
+    
+    if (isRootToAnswer || isAnswerToSource) {
+      criticality = 1.0;
+      isCritical = true;
+    }
+
+    return {
+      ...edge,
+      source: edge.from,
+      target: edge.to,
+      criticality,
+      isCritical
+    };
+  });
 
   return {
     nodes: enhancedNodes,

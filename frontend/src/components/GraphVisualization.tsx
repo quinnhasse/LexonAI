@@ -22,6 +22,7 @@ interface GraphVisualizationProps {
   onNodeClick: (node: GraphNode) => void
   onInteraction: () => void
   isDemoMode?: boolean
+  activeSpotlight?: string | null
 }
 
 interface AnimationState {
@@ -32,14 +33,20 @@ interface AnimationState {
 }
 
 // Component to update camera position
-function CameraController({ distance }: { distance: number }) {
+function CameraController({ distance, layoutMode }: { distance: number, layoutMode: LayoutMode }) {
   const { camera } = useThree()
 
   useEffect(() => {
-    camera.position.set(0, distance, 0)
+    if (layoutMode === 'flat') {
+      // Front-facing view for 2D grid
+      camera.position.set(0, 0, distance)
+    } else {
+      // Top-down view for 3D/Circular layouts
+      camera.position.set(0, distance, 0)
+    }
     camera.lookAt(0, 0, 0)
     camera.updateProjectionMatrix()
-  }, [distance, camera])
+  }, [distance, camera, layoutMode])
 
   return null
 }
@@ -151,8 +158,15 @@ const applyLayout = (
       }))
 
     case 'flat':
+      // Baseline 2D Grid Layout
+      const flatPositions = layoutEngine.calculatePositions(nodes, 'flat')
+      return nodes.map(node => ({
+        ...node,
+        position: flatPositions.get(node.id) || node.position || [0, 0, 0]
+      }))
+
     default:
-      // Baseline/fallback layout (same as cluster for now)
+      // Fallback layout (same as cluster)
       return calculateHierarchicalLayout(nodes, edges)
   }
 }
@@ -235,6 +249,7 @@ export default function GraphVisualization({
   onNodeClick,
   onInteraction,
   isDemoMode = false,
+  activeSpotlight = null
 }: GraphVisualizationProps) {
   const [positionedNodes, setPositionedNodes] = useState<GraphNode[]>([])
   const [prunedEdges, setPrunedEdges] = useState<EdgeType[]>([])
@@ -254,6 +269,24 @@ export default function GraphVisualization({
   const cameraAnimationRef = useRef<number | null>(null)
   const previousNodeIdsRef = useRef<Set<string>>(new Set())
   const previousLayoutModeRef = useRef<LayoutMode>(layoutMode)
+
+  // Helper to check if node matches active spotlight
+  const isNodeInSpotlight = (node: GraphNode): boolean => {
+    if (!activeSpotlight) return true
+    
+    switch (activeSpotlight) {
+      case 'QUERY':
+        return node.type === 'question' || node.type === 'answer_root'
+      case 'LOGIC':
+        return node.type === 'answer_block'
+      case 'EVIDENCE':
+        return node.type === 'direct_source'
+      case 'CONTEXT':
+        return node.type === 'secondary_source'
+      default:
+        return false
+    }
+  }
 
   useEffect(() => {
     if (nodes.length > 0) {
@@ -663,7 +696,7 @@ export default function GraphVisualization({
         onWheel={handleInteractionStart}
       >
         <PerspectiveCamera makeDefault position={[0, 25, 0]} />
-        <CameraController distance={cameraDistance} />
+        <CameraController distance={cameraDistance} layoutMode={layoutMode} />
         <NodeVisibilityTracker
           nodes={positionedNodes}
           onVisibilityChange={setNodesInCameraView}

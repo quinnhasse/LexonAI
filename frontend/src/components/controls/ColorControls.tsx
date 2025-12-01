@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import type { ColorMode } from '../../types';
 import { COLOR_PALETTES } from '../../utils/colorPalettes';
-import { getButtonStyle, COLORS } from '../../utils/constants';
+import { getButtonStyle, COLORS, SEMANTIC_COLORS } from '../../utils/constants';
 
 interface ColorControlsProps {
   mode: ColorMode;
@@ -9,7 +9,8 @@ interface ColorControlsProps {
 }
 
 export function ColorControls({ mode, onChange }: ColorControlsProps) {
-  const palette = COLOR_PALETTES.tactical;
+  // The Tactical Polygon Shape for Selected State
+  const TACTICAL_CLIP_PATH = 'polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px)';
 
   const colorModes: Array<{
     value: ColorMode;
@@ -19,40 +20,54 @@ export function ColorControls({ mode, onChange }: ColorControlsProps) {
   }> = [
     {
       value: 'white',
-      label: 'Monochrome',
-      description: 'Grayscale tactical view',
+      label: 'MONOCHROME',
+      description: 'Tactical Grayscale',
       previewColors: ['#cccccc', '#999999', '#666666'],
     },
     {
       value: 'byLevel',
-      label: 'By Tier',
-      description: 'Tactical layer depth coding',
-      previewColors: [palette.tier1, palette.tier2, palette.tier3],
-    },
+      label: 'SEMANTIC LAYERS',
+      description: 'Data Type Coding',
+      previewColors: [SEMANTIC_COLORS.QUERY, SEMANTIC_COLORS.LOGIC, SEMANTIC_COLORS.EVIDENCE, SEMANTIC_COLORS.CONTEXT],
+    }
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <div style={{ fontSize: '10px', color: '#666666', marginBottom: '6px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', fontFamily: 'monospace' }}>
-        Color Mode
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         {colorModes.map((colorMode) => {
           const isSelected = mode === colorMode.value;
-          const buttonStyle = getButtonStyle(isSelected);
-
+          // Custom button style implementation for granular control
+          
           return (
             <button
               key={colorMode.value}
               onClick={() => onChange(colorMode.value)}
               style={{
-                ...buttonStyle,
                 width: '100%',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                padding: '10px',
+                padding: '10px 12px',
                 textAlign: 'left',
+                // Angular Shape
+                clipPath: isSelected ? TACTICAL_CLIP_PATH : 'none',
+                background: isSelected ? '#ffffff' : 'transparent',
+                color: isSelected ? '#000000' : '#9ca3af',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                height: '44px'
+              }}
+              onMouseEnter={(e) => {
+                if (!isSelected) {
+                    e.currentTarget.style.color = '#ffffff';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isSelected) {
+                    e.currentTarget.style.color = '#9ca3af';
+                }
               }}
             >
               {/* Color preview swatches */}
@@ -63,27 +78,41 @@ export function ColorControls({ mode, onChange }: ColorControlsProps) {
                     style={{
                       width: '10px',
                       height: '10px',
-                      border: `1px solid ${isSelected ? '#000000' : '#333333'}`,
+                      // Swatch Border Logic: Black border if selected (to pop against white), Transparent/Subtle if not
+                      border: isSelected ? '1px solid #000000' : '1px solid rgba(255,255,255,0.2)',
                       backgroundColor: color,
+                      borderRadius: '1px' // Sharp/Technical
                     }}
                   />
                 ))}
               </div>
 
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{colorMode.label}</div>
-                <div style={{ fontSize: '10px', color: isSelected ? '#000000' : '#666666', marginTop: '2px' }}>{colorMode.description}</div>
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <div style={{ 
+                  fontSize: '10px', 
+                  fontWeight: 800, // Extra Bold
+                  color: isSelected ? '#000000' : '#f3f4f6', // Gray-100
+                  textTransform: 'uppercase', 
+                  letterSpacing: '0.1em',
+                  fontFamily: 'Space Mono, monospace',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {colorMode.label}
+                </div>
+                <div style={{ 
+                  fontSize: '9px', 
+                  color: isSelected ? '#4b5563' : '#9ca3af', // Gray-600 vs Gray-400
+                  marginTop: '2px',
+                  fontWeight: 500, // Medium
+                  fontFamily: 'Space Mono, monospace',
+                  letterSpacing: '0.05em',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {colorMode.description}
+                </div>
               </div>
-
-              {isSelected && (
-                <div
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    background: '#000000',
-                  }}
-                />
-              )}
             </button>
           );
         })}

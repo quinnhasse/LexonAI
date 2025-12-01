@@ -8,6 +8,7 @@ import { colorEngine } from '../utils/colorPalettes'
 interface NodeProps {
   node: GraphNode
   isHighlighted: boolean
+  isDimmed?: boolean
   onClick: () => void
   animationProgress: number // 0 to 1
   colorMode?: ColorMode
@@ -46,7 +47,7 @@ const nodeTypeConfig = {
   },
 }
 
-export default function Node({ node, isHighlighted, onClick, animationProgress, colorMode = 'white' }: NodeProps) {
+export default function Node({ node, isHighlighted, isDimmed = false, onClick, animationProgress, colorMode = 'white' }: NodeProps) {
   const meshRef = useRef<Mesh>(null)
   const wireframeRef = useRef<Mesh>(null)
   const textRef = useRef<Group>(null)
@@ -54,8 +55,8 @@ export default function Node({ node, isHighlighted, onClick, animationProgress, 
   const currentScaleRef = useRef(1) // Track current interpolated scale
   const { camera } = useThree()
 
-  // Target scale based on state
-  const targetBaseScale = hovered ? 1.2 : isHighlighted ? 1.1 : 1
+  // Target scale based on state - spotlighted nodes grow
+  const targetBaseScale = hovered ? 1.2 : isHighlighted ? 1.1 : isDimmed ? 0.8 : 1
   const animScale = animationProgress < 1
     ? animationProgress * (1 + (1 - animationProgress) * 0.3) // Overshoot then settle
     : 1
@@ -64,18 +65,20 @@ export default function Node({ node, isHighlighted, onClick, animationProgress, 
   const baseConfig = nodeTypeConfig[node.type]
   const nodeColor = useMemo(() => {
     if (colorMode === 'white') {
-      return baseConfig.color
+      return isDimmed ? '#444444' : baseConfig.color
     }
     return colorEngine.getNodeColor(node, colorMode)
-  }, [node, colorMode, baseConfig.color])
+  }, [node, colorMode, baseConfig.color, isDimmed])
 
   const config = { ...baseConfig, color: nodeColor }
 
   useFrame((state) => {
     if (meshRef.current) {
-      // Gentle floating animation
-      const t = state.clock.getElapsedTime()
-      meshRef.current.position.y += Math.sin(t * 0.5 + (node.position?.[0] || 0)) * 0.001
+      // Gentle floating animation (disable if dimmed)
+      if (!isDimmed) {
+        const t = state.clock.getElapsedTime()
+        meshRef.current.position.y += Math.sin(t * 0.5 + (node.position?.[0] || 0)) * 0.001
+      }
     }
 
     // Smooth scale transition using lerp
@@ -106,6 +109,9 @@ export default function Node({ node, isHighlighted, onClick, animationProgress, 
 
   // Get display text - prioritize short labels for better visualization
   const getDisplayText = (): string => {
+    // Hide text if dimmed
+    if (isDimmed && !hovered) return ''
+
     // 1. First try shortLabel (1-3 words, ideal for viz)
     if (node.shortLabel) return node.shortLabel
 
@@ -170,12 +176,12 @@ export default function Node({ node, isHighlighted, onClick, animationProgress, 
           color={nodeColor}
           wireframe
           transparent
-          opacity={(isHighlighted ? 0.7 : 0.4) * animationProgress}
+          opacity={(isHighlighted ? 0.7 : isDimmed ? 0.1 : 0.4) * animationProgress}
         />
       </mesh>
 
       {/* Glow effect during spawn */}
-      {animationProgress < 1 && (
+      {animationProgress < 1 && !isDimmed && (
         <mesh scale={scale * (1.2 + (1 - animationProgress) * 0.5)}>
           <sphereGeometry args={[config.radius, 12, 8]} />
           <meshBasicMaterial

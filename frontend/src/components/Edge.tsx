@@ -7,6 +7,7 @@ interface EdgeProps {
   start: [number, number, number]
   end: [number, number, number]
   isHighlighted: boolean
+  isDimmed?: boolean
   animationProgress: number // 0 to 1
   sourceRadius: number
   targetRadius: number
@@ -14,7 +15,7 @@ interface EdgeProps {
   anyNodeInCameraView: boolean // Whether source and/or target node is visible in camera
 }
 
-export default function Edge({ start, end, isHighlighted, animationProgress, sourceRadius, targetRadius, relation, anyNodeInCameraView }: EdgeProps) {
+export default function Edge({ start, end, isHighlighted, isDimmed = false, animationProgress, sourceRadius, targetRadius, relation, anyNodeInCameraView }: EdgeProps) {
   const { camera } = useThree()
   const [dynamicBuffer, setDynamicBuffer] = useState(0.3)
   const [smoothedOpacityMultiplier, setSmoothedOpacityMultiplier] = useState(1.0)
@@ -93,13 +94,14 @@ export default function Edge({ start, end, isHighlighted, animationProgress, sou
   }, [start, end, animationProgress, sourceRadius, targetRadius, dynamicBuffer, isStraightEdge, isSemantic])
 
   // Opacity fades in with progress - semantic edges much more subtle
-  const baseOpacity = isHighlighted ? 0.12 : isSemantic ? 0.01 : 0.04
+  // If dimmed, make almost invisible
+  const baseOpacity = isDimmed ? 0.02 : isHighlighted ? 0.12 : isSemantic ? 0.01 : 0.04
 
   // Camera-aware opacity: smoothly transition between 30% and 100%
   const opacity = baseOpacity * animationProgress * smoothedOpacityMultiplier
 
-  // Glow effect during drawing - disabled for semantic edges
-  const glowIntensity = (animationProgress < 1 && !isSemantic) ? (1 - animationProgress) * 0.3 : 0
+  // Glow effect during drawing - disabled for semantic edges and dimmed edges
+  const glowIntensity = (animationProgress < 1 && !isSemantic && !isDimmed) ? (1 - animationProgress) * 0.3 : 0
 
   return (
     <>

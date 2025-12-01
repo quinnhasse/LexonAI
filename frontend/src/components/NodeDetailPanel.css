@@ -40,32 +40,44 @@
   font-weight: 600;
 }
 
+/* Technical Badge Style */
 .role-badge {
   display: inline-block;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 4px; /* Sharper corners for technical feel */
+  font-size: 10px;
+  font-weight: 700; /* Bold */
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.1em; /* Wide tracking */
+  font-family: 'Space Mono', monospace; /* Enforce mono */
 }
 
-.role-badge[data-role="answer"] {
-  background: rgba(255, 255, 255, 0.15);
-  color: #e0e0e0;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+/* ANSWER ROOT - White Button Style */
+.role-badge[data-role="answer_root"],
+.role-badge[data-role="question"] {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
 }
 
-.role-badge[data-role="block"] {
-  background: rgba(176, 176, 176, 0.15);
-  color: #b0b0b0;
-  box-shadow: 0 0 8px rgba(176, 176, 176, 0.1);
+/* Other types */
+.role-badge[data-role="answer_block"] {
+  background: rgba(234, 179, 8, 0.2); /* Yellow tint */
+  color: #EAB308;
+  border: 1px solid rgba(234, 179, 8, 0.4);
 }
 
-.role-badge[data-role="source"] {
-  background: rgba(96, 96, 96, 0.15);
-  color: #909090;
-  box-shadow: 0 0 6px rgba(96, 96, 96, 0.1);
+.role-badge[data-role="direct_source"] {
+  background: rgba(20, 184, 166, 0.2); /* Teal tint */
+  color: #14B8A6;
+  border: 1px solid rgba(20, 184, 166, 0.4);
+}
+
+.role-badge[data-role="secondary_source"] {
+  background: rgba(34, 197, 94, 0.2); /* Green tint */
+  color: #22C55E;
+  border: 1px solid rgba(34, 197, 94, 0.4);
 }
 
 .close-button {
@@ -101,17 +113,19 @@
 
 .content-section h4 {
   color: rgba(255, 255, 255, 0.5);
-  font-size: 12px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.1em;
   margin-bottom: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: 'Space Mono', monospace;
 }
 
 .content-section p {
   color: rgba(255, 255, 255, 0.9);
   line-height: 1.6;
   margin: 0;
+  font-size: 14px;
 }
 
 .source-text {
