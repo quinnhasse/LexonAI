@@ -7,9 +7,9 @@
  * edges for the 3D visualization.
  */
 
-import { EvidenceNodeType } from '../types/shared';
-import { config } from '../config/env';
-import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density';
+import { EvidenceNodeType } from '../types/shared.js';
+import { config } from '../config/env.js';
+import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density.js';
 import OpenAI from 'openai';
 
 // ============================================================================

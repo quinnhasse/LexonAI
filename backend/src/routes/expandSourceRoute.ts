@@ -7,8 +7,8 @@
  */
 
 import { Request, Response, Express } from 'express';
-import { expandSourceAgent, ExpandedConcept } from '../services/expandSourceAgent';
-import { DensityLevel, DEFAULT_DENSITY } from '../config/density';
+import { expandSourceAgent, ExpandedConcept } from '../services/expandSourceAgent.js';
+import { DensityLevel, DEFAULT_DENSITY } from '../config/density.js';
 
 /**
  * Request body interface

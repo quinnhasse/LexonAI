@@ -1,5 +1,5 @@
 import { Request, Response, Express } from 'express';
-import { expandReasoning } from '../services/reasoningExpander';
+import { expandReasoning } from '../services/reasoningExpander.js';
 
 interface ExpandRequest {
   title: string;

@@ -3,9 +3,9 @@
  * Fetches and structures sources from the web using Exa API
  */
 
-import { Source } from '../types/shared';
-import { config } from '../config/env';
-import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density';
+import { Source } from '../types/shared.js';
+import { config } from '../config/env.js';
+import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density.js';
 
 /**
  * Exa API request interface

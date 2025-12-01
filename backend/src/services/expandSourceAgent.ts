@@ -6,8 +6,8 @@
  * from an arbitrary web source without requiring the full /ask pipeline.
  */
 
-import { config } from '../config/env';
-import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density';
+import { config } from '../config/env.js';
+import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density.js';
 import { Exa } from 'exa-js';
 
 const exaClient = config.exaApiKey ? new Exa(config.exaApiKey) : null;

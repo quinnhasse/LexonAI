@@ -7,9 +7,9 @@
  * additional context for the 3D knowledge ball visualization.
  */
 
-import { Source, AnswerPayload } from '../types/shared';
-import { config } from '../config/env';
-import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density';
+import { Source, AnswerPayload } from '../types/shared.js';
+import { config } from '../config/env.js';
+import { getDensityConfig, DEFAULT_DENSITY, DensityLevel } from '../config/density.js';
 import { Exa } from 'exa-js';
 
 const exaClient = config.exaApiKey ? new Exa(config.exaApiKey) : null;

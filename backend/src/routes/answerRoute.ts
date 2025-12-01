@@ -9,12 +9,12 @@
  */
 
 import { Request, Response, Express } from 'express';
-import { researchAgent } from '../services/researchAgent';
-import { answerAgent } from '../services/answerAgent';
-import { buildEvidenceGraph } from '../services/evidenceGraph';
-import { AnswerResponse, AnswerPayload, Source, EvidenceGraph } from '../types/shared';
-import { DensityLevel, DEFAULT_DENSITY, inferDensityLevel } from '../config/density';
-import { progressManager } from '../services/progressManager';
+import { researchAgent } from '../services/researchAgent.js';
+import { answerAgent } from '../services/answerAgent.js';
+import { buildEvidenceGraph } from '../services/evidenceGraph.js';
+import { AnswerResponse, AnswerPayload, Source, EvidenceGraph } from '../types/shared.js';
+import { DensityLevel, DEFAULT_DENSITY, inferDensityLevel } from '../config/density.js';
+import { progressManager } from '../services/progressManager.js';
 
 interface AnswerRequest {
   question: string;

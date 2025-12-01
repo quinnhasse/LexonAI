@@ -11,15 +11,15 @@ import {
   EvidenceEdge,
   Source,
   AnswerBlock
-} from '../types/shared';
-import { secondarySourceAgent, SecondarySourceNode } from './secondarySourceAgent';
-import { semanticGraphBuilder, EmbeddableNode } from './semanticGraphBuilder';
-import { getDensityConfig, DEFAULT_DENSITY, DensityLevel, logDensityConfig } from '../config/density';
+} from '../types/shared.js';
+import { secondarySourceAgent, SecondarySourceNode } from './secondarySourceAgent.js';
+import { semanticGraphBuilder, EmbeddableNode } from './semanticGraphBuilder.js';
+import { getDensityConfig, DEFAULT_DENSITY, DensityLevel, logDensityConfig } from '../config/density.js';
 import {
   generateQuestionLabel,
   generateSourceLabel,
   generateAnswerBlockLabels
-} from '../utils/labelGenerator';
+} from '../utils/labelGenerator.js';
 
 /**
  * Custom error for graph building failures

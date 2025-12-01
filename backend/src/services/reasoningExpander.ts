@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { config } from '../config/env';
+import { config } from '../config/env.js';
 
 const MODEL = 'gpt-4o-mini';
 const DEFAULT_TEMPERATURE = 0.45;

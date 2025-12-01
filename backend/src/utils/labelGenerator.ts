@@ -5,7 +5,7 @@
  */
 
 import OpenAI from 'openai';
-import { config } from '../config/env';
+import { config } from '../config/env.js';
 
 // ============================================================================
 // DOMAIN BRAND EXTRACTION

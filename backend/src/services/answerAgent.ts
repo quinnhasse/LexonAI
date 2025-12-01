@@ -9,8 +9,8 @@
  * - Falls back gracefully on errors to ensure system reliability
  */
 
-import { Source, AnswerPayload, AnswerBlock } from '../types/shared';
-import { config } from '../config/env';
+import { Source, AnswerPayload, AnswerBlock } from '../types/shared.js';
+import { config } from '../config/env.js';
 import OpenAI from 'openai';
 
 // ============================================================================

@@ -6,7 +6,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { progressManager } from '../services/progressManager';
+import { progressManager } from '../services/progressManager.js';
 
 const router = Router();
 

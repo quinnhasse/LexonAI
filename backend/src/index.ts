@@ -4,11 +4,11 @@
  */
 
 import express from 'express';
-import { config } from './config/env';
-import { registerAnswerRoute } from './routes/answerRoute';
-import { registerExpandRoute } from './routes/expandRoute';
-import { registerExpandSourceRoute } from './routes/expandSourceRoute';
-import progressRoute from './routes/progressRoute';
+import { config } from './config/env.js';
+import { registerAnswerRoute } from './routes/answerRoute.js';
+import { registerExpandRoute } from './routes/expandRoute.js';
+import { registerExpandSourceRoute } from './routes/expandSourceRoute.js';
+import progressRoute from './routes/progressRoute.js';
 
 // Load environment variables from .env file
 import dotenv from 'dotenv';
